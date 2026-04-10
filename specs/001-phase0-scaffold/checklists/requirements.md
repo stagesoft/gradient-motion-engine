@@ -33,5 +33,6 @@
 
 - All items pass validation.
 - Updated per user clarifications: XSD/XML parsing excluded from Phase 0; CuemsLogger is the logging strategy; all shared components use git submodules.
-- Added User Story 4 (CuemsLogger integration) and FR-007/FR-008/FR-010 to reflect submodule and logging decisions.
-- The CuemsLogger submodule source URL needs confirmation (assumption documented).
+- Target names aligned with README architecture: `libgradient_motion` (library), `gradient-motiond` (daemon).
+- Source layout follows `gme::*` namespace modules from README Architecture section.
+- The CuemsLogger submodule source URL confirmed as `https://github.com/stagesoft/cuemslogger.git`.
