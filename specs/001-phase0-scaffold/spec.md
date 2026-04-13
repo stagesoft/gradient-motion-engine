@@ -76,7 +76,7 @@ A developer integrates the CuemsLogger component as a git submodule behind a bui
 
 ### Edge Cases
 
-- What happens when required git submodules are not initialized? The build system MUST produce a clear error message identifying which submodule is missing (except cuemslogger when `ENABLE_CUEMS_LOGGER=OFF`).
+- What happens when required git submodules are not initialized (submodule directory absent or empty)? The build system MUST produce a clear error message identifying which submodule is missing (except cuemslogger when `ENABLE_CUEMS_LOGGER=OFF`).
 - What happens when `ENABLE_CUEMS_LOGGER=ON` but the cuemslogger submodule is not initialized? The build MUST fail with a clear error message.
 - What happens when a CLI argument is invalid or unrecognized? The application MUST print a usage message and exit with a non-zero status code.
 - What happens when required build dependencies are missing? The build system MUST produce a clear error message identifying the missing dependency.
@@ -88,15 +88,15 @@ A developer integrates the CuemsLogger component as a git submodule behind a bui
 
 - **FR-001**: The build system MUST define two targets: a static library (`libgradient_motion`) organized by `gme::*` namespace modules, and a daemon executable (`gradient-motiond`)
 - **FR-002**: The build system MUST enforce the C++17 standard with warnings enabled and optimizations for release builds
-- **FR-003**: The executable MUST accept CLI arguments for `--midi-port` (MIDI port name), `--log-level` (logging verbosity override), and `--conf-path` (configuration directory path)
+- **FR-003**: The executable MUST accept CLI arguments for `--midi-port` (MIDI port name), `--log-level` (logging verbosity override), `--conf-path` (configuration directory path), `--help` (print usage and exit), and `--version` (print version and exit)
 - **FR-004**: The application MUST follow a structured lifecycle pattern: initialize, run (block until signal), shutdown (release resources)
 - **FR-005**: The application MUST handle POSIX termination signals (SIGTERM, SIGINT) for clean shutdown
 - **FR-006**: The build system MUST integrate the MTC receiver as a git submodule, compiling it as a subdirectory target
 - **FR-007**: The build system MUST provide an `ENABLE_CUEMS_LOGGER` option (default ON) that controls whether CuemsLogger is compiled and linked
 - **FR-008**: When `ENABLE_CUEMS_LOGGER=ON`, the application MUST use CuemsLogger for all log output with journal integration. When OFF, the application MUST fall back to standard library logging (`<iostream>` to stderr)
-- **FR-011**: The daemon MUST expose a compile-time logging abstraction (`daemon/logging.h`) that provides a uniform API regardless of the selected backend
-- **FR-009**: The build system MUST declare all external library dependencies so that missing dependencies produce clear build-time errors
-- **FR-010**: Third-party and shared CUEMS components MUST be included as git submodules, not as copied source files, to enable upstream tracking
+- **FR-009**: The daemon MUST expose a compile-time logging abstraction (`daemon/logging.h`) that provides a uniform API regardless of the selected backend
+- **FR-010**: The build system MUST declare all external library dependencies so that missing dependencies produce clear build-time errors
+- **FR-011**: Third-party and shared CUEMS components MUST be included as git submodules, not as copied source files, to enable upstream tracking
 
 ### Key Entities
 
