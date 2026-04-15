@@ -37,14 +37,16 @@ An operator or cue designer configures a fade and selects a curve shape (e.g., "
 
 **Why this priority**: The upstream command protocol delivers curve type as a string. Without name-based construction, no fade command from the controller can be translated into a working curve instance.
 
+**Dependency**: This user story depends on User Story 3 (Performant Evaluation) — the factory wraps all returned curves in `ResampledCurve` by default, so `ResampledCurve` must exist before the factory can be implemented.
+
 **Independent Test**: Can be tested by requesting curves by name with varying parameter sets and verifying the returned curve evaluates correctly for that shape. Delivers the ability to map user/protocol input to working curve objects.
 
 **Acceptance Scenarios**:
 
-1. **Given** a valid curve type name "sigmoid" and valid parameters, **When** a curve is requested, **Then** a sigmoid curve instance is returned that evaluates correctly
-2. **Given** a valid curve type name "linear" with no parameters, **When** a curve is requested, **Then** a linear curve instance is returned
-3. **Given** an unknown curve type name, **When** a curve is requested, **Then** the system falls back to a linear curve and reports a warning
-4. **Given** a valid curve type name with missing optional parameters, **When** a curve is requested, **Then** reasonable defaults are applied
+1. **Given** a valid curve type name "sigmoid" and valid parameters, **When** a curve is requested, **Then** a curve instance is returned (present in the optional) that evaluates correctly as a sigmoid
+2. **Given** a valid curve type name "linear" with no parameters, **When** a curve is requested, **Then** a curve instance is returned that evaluates as a linear curve
+3. **Given** an unknown curve type name, **When** a curve is requested, **Then** the result is absent (nullopt) and the system reports a warning; the caller is responsible for applying any fallback
+4. **Given** a valid curve type name with missing optional parameters, **When** a curve is requested, **Then** reasonable defaults are applied and a valid curve is returned
 
 ---
 
@@ -117,8 +119,8 @@ When crossfading between two sources (e.g., fading out one audio cue while fadin
 - **FR-007**: System MUST provide a scaling decorator that remaps any curve's input range from [inMin, inMax] to [0, 1] and output range from [0, 1] to [outMin, outMax]
 - **FR-008**: System MUST provide a resampled curve decorator that pre-computes an N-sample lookup table at construction and performs linear interpolation at evaluation time, with a default sample count of 256
 - **FR-009**: System MUST provide a crossfade pair that wraps a single curve and returns both the evaluated value and its complement (1.0 minus evaluated value) to guarantee the pair always sums to 1.0
-- **FR-010**: System MUST provide a factory that creates curve instances from a type name string and a parameter set, returning a resampled-wrapped curve by default
-- **FR-011**: The factory MUST fall back to a linear curve when given an unrecognized curve type name, and report a warning
+- **FR-010**: System MUST provide a factory that creates curve instances from a type name string and a parameter set, returning a resampled-wrapped curve wrapped in `std::optional` so callers can detect success or absence
+- **FR-011**: The factory MUST return an absent result (`std::nullopt`) when given an unrecognized curve type name and MUST emit a warning; the caller is responsible for applying any desired fallback (e.g., substituting a linear curve)
 - **FR-012**: All curve implementations MUST be self-contained with no dependencies on daemon logic, communication protocols, or system-specific services
 
 ### Key Entities
@@ -137,7 +139,7 @@ When crossfading between two sources (e.g., fading out one audio cue while fadin
 - **SC-002**: Resampled curve output deviates from the original curve by no more than 0.5% at any evaluated point (with default 256 samples)
 - **SC-003**: Crossfade pair values sum to exactly 1.0 at every evaluated point
 - **SC-004**: All supported curve types (linear, sigmoid, bezier, ease-in, ease-out, s-curve) can be instantiated by name through the factory
-- **SC-005**: Factory handles unknown curve type names gracefully without failure, falling back to a default shape
+- **SC-005**: Factory returns an absent result (`std::nullopt`) for unknown curve type names without throwing or crashing; callers can detect absence and apply their own fallback
 - **SC-006**: The module has no dependencies on daemon code, communication protocols, or OS-specific services — it can be built and tested in isolation
 
 ## Assumptions

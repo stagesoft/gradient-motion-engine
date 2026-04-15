@@ -48,7 +48,7 @@ Single test binary `tests/test_curves.cpp` covering:
 3. **ScaledCurve range mapping**: Verify input/output remapping at boundaries and midpoint
 4. **ResampledCurve accuracy**: Compare resampled output vs original at many points, verify max deviation < 0.5%
 5. **CrossfadePair invariant**: Verify primary + complement = 1.0 at sampled points
-6. **CurveFactory**: Verify all type names produce working curves; unknown name falls back to linear
+6. **CurveFactory**: Verify all type names produce a valid optional containing a working curve; unknown name returns `std::nullopt` (no fallback — caller applies it)
 7. **Input clamping**: Verify t < 0 and t > 1 produce boundary values
 
 ## Dependencies on Other Modules

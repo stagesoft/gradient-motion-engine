@@ -64,6 +64,27 @@ if(ENABLE_CUEMS_LOGGER)
 endif()
 
 # ===========================================================
+# Documentation (Doxygen)
+# ===========================================================
+find_package(Doxygen QUIET)
+if(DOXYGEN_FOUND)
+    set(DOXYGEN_PROJECT_NAME "gradient-motion-engine")
+    set(DOXYGEN_PROJECT_BRIEF "Node-level fade engine with mathematical curve evaluation")
+    set(DOXYGEN_RECURSIVE YES)
+    set(DOXYGEN_EXTRACT_ALL YES)
+    set(DOXYGEN_WARN_AS_ERROR YES)
+    set(DOXYGEN_GENERATE_HTML YES)
+    set(DOXYGEN_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/docs")
+    doxygen_add_docs(docs
+        "${CMAKE_SOURCE_DIR}/src"
+        COMMENT "Generating API documentation with Doxygen"
+    )
+    message(STATUS "Doxygen found — run 'cmake --build . --target docs' to generate API docs")
+else()
+    message(STATUS "Doxygen not found — 'docs' target unavailable. Install doxygen to enable API doc generation.")
+endif()
+
+# ===========================================================
 # Library target
 # ===========================================================
 add_subdirectory(src)

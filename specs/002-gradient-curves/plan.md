@@ -32,7 +32,18 @@ Implement the `gme::gradient` module — a self-contained curve evaluation libra
 | V. Protocol-Agnostic Core | PASS | No transport, serialization, or protocol awareness. Factory accepts `std::string` + JSON params — generic data, not protocol-specific. |
 | VI. Documentation Standards | MUST COMPLY | All public classes and methods require Doxygen-compatible docstrings with brief, params, long description, errors, and example code. |
 
-**Result**: All gates pass. No violations to justify.
+**Result**: All six core gates pass. No violations to justify.
+
+**Performance & Safety Standards supplement** (checked separately from core principles):
+
+| Standard | Status | Notes |
+| -------- | ------ | ----- |
+| Zero heap allocations per evaluation frame | PASS | `evaluate()` performs only array indexing and arithmetic; `std::vector<double>` LUT is pre-allocated at construction |
+| Latency target < 1 ms per tick | PASS (design) | `ResampledCurve::evaluate()` is a single multiply-add; verified analytically. Benchmark task (T027) will confirm empirically. |
+| Single-thread safety | PASS | No mutable state in any `evaluate()` path; documented in Curve interface docstring |
+| Error handling — explicit error types | JUSTIFIED DEVIATION | `CurveFactory::createCurve()` returns `std::optional<unique_ptr<Curve>>` — absence signals an unknown type. This satisfies the MUST for explicit error signalling without exception propagation. The factory never throws. Rationale from research.md R6: the upstream command layer delivers type names as strings; the caller (engine) is the correct place to apply a fallback policy. |
+| Exceptions MUST NOT cross library boundaries | PASS | No function in `gme::gradient` throws; all paths are total or return optional/null. |
+| Build reproducibility | PASS | Toolchain and dependency versions pinned in root CMakeLists.txt |
 
 ## Project Structure
 

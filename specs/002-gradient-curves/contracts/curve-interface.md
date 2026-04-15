@@ -23,17 +23,28 @@ The single public contract exposed by the gradient module. All curve types, deco
 
 ---
 
-## Factory: CurveFactory::createCurve(type, params) → Curve
+## Factory: CurveFactory::createCurve(type, params) → optional\<Curve\>
 
 **Input**:
 - `type` — string identifying the curve shape (see supported names in data-model.md)
 - `params` — JSON object with curve-specific parameters (missing keys use defaults)
 
-**Output**: Owned curve instance, wrapped in ResampledCurve by default.
+**Output**: `std::optional<std::unique_ptr<Curve>>`.
+- Known `type` → `optional` containing an owned curve instance, wrapped in `ResampledCurve` by default.
+- Unknown `type` → `std::nullopt` + warning emitted to `stderr`.
+
+**Caller responsibility**: The caller MUST check whether the result contains a value. A typical fallback pattern:
+
+```cpp
+auto result = CurveFactory::createCurve("unknown_type", {});
+auto curve = result
+    ? std::move(*result)
+    : std::make_unique<ResampledCurve>(LinearCurve{});
+```
 
 **Error handling**:
-- Unknown `type` → returns ResampledCurve(LinearCurve) + emits warning
-- Malformed `params` → applies defaults for missing/invalid fields, does not throw
+- Unknown `type` → returns `std::nullopt` + emits `stderr` warning; no throw
+- Malformed `params` → applies defaults for missing/invalid fields, returns a valid curve; does not throw
 
 ---
 
