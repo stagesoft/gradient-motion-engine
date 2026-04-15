@@ -97,7 +97,7 @@ tests/                        ← empty in Phase 0
 ### Implementation for User Story 3
 
 - [x] T018 [US3] Verify mtcreceiver compiles and links against `librtmidi >= 5.0` at pinned commit `63ce3de` — confirm `RTMIDI_INCLUDE_DIRS` and `RTMIDI_LIBRARIES` are passed correctly from root CMakeLists.txt, no local patches applied, no compiler errors or warnings
-- [x] T019 [US3] Verify `HAVE_CUEMS_LOGGER` is NOT defined for the mtcreceiver target — mtcreceiver uses its built-in stub logger, avoiding the `cuems_errors.h` dependency. Confirm in root `CMakeLists.txt` that no `-DHAVE_CUEMS_LOGGER` is added to mtcreceiver compile definitions
+- [x] T019 [US3] Verify `HAVE_CUEMS_LOGGER` IS defined for mtcreceiver when `ENABLE_CUEMS_LOGGER=ON` (both daemon and mtcreceiver use CuemsLogger), and is NOT defined when `ENABLE_CUEMS_LOGGER=OFF` (both use stdlib/stub fallback). A minimal `cuems_errors.h` shim at repo root satisfies mtcreceiver's `#include "../cuems_errors.h"` dependency. Confirm cuemslogger is linked to mtcreceiver only when enabled
 
 **Checkpoint**: MTC receiver integration validated — compiles cleanly as git submodule dependency.
 

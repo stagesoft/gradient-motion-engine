@@ -1,4 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
+# Allow target_link_libraries() on targets defined in other directories
+# (needed to link cuemslogger into mtcreceiver from the root CMakeLists)
+cmake_policy(SET CMP0079 NEW)
 project(gradient-motion-engine LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -54,6 +57,11 @@ if(ENABLE_CUEMS_LOGGER)
 endif()
 
 add_subdirectory(mtcreceiver)
+
+if(ENABLE_CUEMS_LOGGER)
+    target_compile_definitions(mtcreceiver PRIVATE HAVE_CUEMS_LOGGER)
+    target_link_libraries(mtcreceiver cuemslogger)
+endif()
 
 # ===========================================================
 # Library target

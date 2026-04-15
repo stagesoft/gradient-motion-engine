@@ -45,13 +45,15 @@
 1. Create a minimal `cuems_errors.h` in the repo root defining `CUEMS_EXIT_NO_MIDI_PORTS_FOUND`
 2. Do NOT define `HAVE_CUEMS_LOGGER` for mtcreceiver — let it use the stub logger; use CuemsLogger only in GradientEngine's own daemon code
 
-**Decision**: Option 2 — do NOT define `HAVE_CUEMS_LOGGER` globally. Instead:
-- CuemsLogger is used directly by GradientEngineApplication and other daemon code
-- mtcreceiver uses its built-in stub logger (which outputs to stderr, visible in the journal via `StandardError=journal`)
-- This avoids creating a `cuems_errors.h` shim and keeps submodules truly independent
+**Decision**: ~~Option 2~~ → **Revised to Option 1**: Define `HAVE_CUEMS_LOGGER` for mtcreceiver when `ENABLE_CUEMS_LOGGER=ON`, so both daemon and mtcreceiver use the same logging backend controlled by a single CMake flag. The `cuems_errors.h` dependency is resolved by a minimal shim at repo root (`cuems_errors.h`) defining only `CUEMS_EXIT_NO_MIDI_PORTS_FOUND = 1` — the sole symbol mtcreceiver references. The shim is self-contained and not a copy of VideoComposer's file.
+
+**Implementation**:
+- `cuems_errors.h` at repo root — minimal shim, one `#define`
+- Root `CMakeLists.txt`: after `add_subdirectory(mtcreceiver)`, add `target_compile_definitions(mtcreceiver PRIVATE HAVE_CUEMS_LOGGER)` and `target_link_libraries(mtcreceiver PRIVATE cuemslogger)` inside `if(ENABLE_CUEMS_LOGGER)` block
+- When `ENABLE_CUEMS_LOGGER=OFF`: mtcreceiver still uses its built-in stub logger unchanged
 
 **Alternatives considered**:
-- Defining `HAVE_CUEMS_LOGGER` globally + creating `cuems_errors.h`: couples repo to an undocumented header contract from VideoComposer. Fragile.
+- Keeping Option 2 (stub for mtcreceiver): inconsistent — MTC receiver log messages appear on stderr instead of the journal alongside daemon messages. Acceptable for Phase 0 but undesirable as a permanent state.
 - Forking cuemslogger to remove the `cuems_errors.h` dependency in mtcreceiver: changes upstream shared code for one consumer's convenience. Disproportionate.
 
 ## 3. VideoComposer Lifecycle Pattern
