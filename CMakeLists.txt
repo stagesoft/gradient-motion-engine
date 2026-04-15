@@ -12,12 +12,20 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_compile_options(-Wall -O3 -pthread)
 
 # ===========================================================
+# Build options
+# ===========================================================
+option(ENABLE_CUEMS_LOGGER "Build with CuemsLogger syslog backend" ON)
+option(BUILD_DAEMON "Build the gradient-motiond daemon (requires rtmidi)" ON)
+
+# ===========================================================
 # External dependencies via pkg-config
 # ===========================================================
 find_package(PkgConfig REQUIRED)
 
-# Required: RtMidi (needed by mtcreceiver)
-pkg_check_modules(RTMIDI REQUIRED rtmidi)
+if(BUILD_DAEMON)
+    # Required for daemon: RtMidi (needed by mtcreceiver)
+    pkg_check_modules(RTMIDI REQUIRED rtmidi)
+endif()
 
 # Optional in Phase 0 — checked for availability, not linked yet
 pkg_check_modules(NNG nng)
@@ -28,39 +36,38 @@ pkg_check_modules(LIBLO liblo)
 find_package(nlohmann_json QUIET)
 
 # ===========================================================
-# CuemsLogger option
-# ===========================================================
-option(ENABLE_CUEMS_LOGGER "Build with CuemsLogger syslog backend" ON)
-
-# ===========================================================
 # Submodule presence checks
 # ===========================================================
-if(ENABLE_CUEMS_LOGGER)
-    if(NOT EXISTS "${CMAKE_SOURCE_DIR}/cuemslogger/CMakeLists.txt")
+if(BUILD_DAEMON)
+    if(ENABLE_CUEMS_LOGGER)
+        if(NOT EXISTS "${CMAKE_SOURCE_DIR}/cuemslogger/CMakeLists.txt")
+            message(FATAL_ERROR
+                "cuemslogger submodule not found. "
+                "Run: git submodule update --init --recursive")
+        endif()
+    endif()
+
+    if(NOT EXISTS "${CMAKE_SOURCE_DIR}/mtcreceiver/CMakeLists.txt")
         message(FATAL_ERROR
-            "cuemslogger submodule not found. "
+            "mtcreceiver submodule not found. "
             "Run: git submodule update --init --recursive")
     endif()
-endif()
-
-if(NOT EXISTS "${CMAKE_SOURCE_DIR}/mtcreceiver/CMakeLists.txt")
-    message(FATAL_ERROR
-        "mtcreceiver submodule not found. "
-        "Run: git submodule update --init --recursive")
 endif()
 
 # ===========================================================
 # Submodule targets
 # ===========================================================
-if(ENABLE_CUEMS_LOGGER)
-    add_subdirectory(cuemslogger)
-endif()
+if(BUILD_DAEMON)
+    if(ENABLE_CUEMS_LOGGER)
+        add_subdirectory(cuemslogger)
+    endif()
 
-add_subdirectory(mtcreceiver)
+    add_subdirectory(mtcreceiver)
 
-if(ENABLE_CUEMS_LOGGER)
-    target_compile_definitions(mtcreceiver PRIVATE HAVE_CUEMS_LOGGER)
-    target_link_libraries(mtcreceiver cuemslogger)
+    if(ENABLE_CUEMS_LOGGER)
+        target_compile_definitions(mtcreceiver PRIVATE HAVE_CUEMS_LOGGER)
+        target_link_libraries(mtcreceiver cuemslogger)
+    endif()
 endif()
 
 # ===========================================================
@@ -90,26 +97,34 @@ endif()
 add_subdirectory(src)
 
 # ===========================================================
+# Tests
+# ===========================================================
+enable_testing()
+add_subdirectory(tests)
+
+# ===========================================================
 # Daemon executable
 # ===========================================================
-add_executable(gradient-motiond
-    daemon/main.cpp
-    daemon/GradientEngineApplication.cpp
-    daemon/config/ConfigurationManager.cpp
-)
+if(BUILD_DAEMON)
+    add_executable(gradient-motiond
+        daemon/main.cpp
+        daemon/GradientEngineApplication.cpp
+        daemon/config/ConfigurationManager.cpp
+    )
 
-target_include_directories(gradient-motiond PRIVATE
-    ${CMAKE_SOURCE_DIR}
-)
+    target_include_directories(gradient-motiond PRIVATE
+        ${CMAKE_SOURCE_DIR}
+    )
 
-target_link_libraries(gradient-motiond PRIVATE
-    gradient_motion
-    mtcreceiver
-    ${RTMIDI_LIBRARIES}
-    pthread
-)
+    target_link_libraries(gradient-motiond PRIVATE
+        gradient_motion
+        mtcreceiver
+        ${RTMIDI_LIBRARIES}
+        pthread
+    )
 
-if(ENABLE_CUEMS_LOGGER)
-    target_compile_definitions(gradient-motiond PRIVATE HAVE_CUEMS_LOGGER)
-    target_link_libraries(gradient-motiond PRIVATE cuemslogger)
+    if(ENABLE_CUEMS_LOGGER)
+        target_compile_definitions(gradient-motiond PRIVATE HAVE_CUEMS_LOGGER)
+        target_link_libraries(gradient-motiond PRIVATE cuemslogger)
+    endif()
 endif()
