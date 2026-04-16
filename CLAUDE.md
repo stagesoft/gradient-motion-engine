@@ -1,6 +1,6 @@
 # gradient-motion-engine Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-04-15
+Auto-generated from all feature plans. Last updated: 2026-04-16
 
 ## Active Technologies
 - C++17 (GCC, `-Wall -O3 -pthread`) + None (C++ standard library only — `<cmath>`, `<vector>`, `<memory>`, `<string>`, `<functional>`) (002-gradient-curves)
@@ -23,6 +23,7 @@ tests/
 C++17 (GCC, `-Wall -O3 -pthread`): Follow standard conventions
 
 ## Recent Changes
+- 003-mtc-tick-source: Added C++17 (GCC, `-Wall -O3 -pthread`)
 - 002-gradient-curves: Added C++17 (GCC, `-Wall -O3 -pthread`) + None (C++ standard library only — `<cmath>`, `<vector>`, `<memory>`, `<string>`, `<functional>`)
 
 - 001-phase0-scaffold: Added C++17 (GCC, `-Wall -O3 -pthread`)
