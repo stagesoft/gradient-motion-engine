@@ -9,16 +9,47 @@
  * @note One instance per process. MtcReceiver uses process-global static
  *       members. Constructing two MtcTickSource instances in the same
  *       process produces undefined behavior.
+ *
+ * @example Typical initialization and usage:
+ * @code
+ *   gme::time::MtcTickSource src;
+ *
+ *   src.setTickCallback([](long ms) {
+ *       // Evaluate fade curve at timecode position `ms`.
+ *       // MUST be lock-free — fires from the MIDI thread.
+ *   });
+ *
+ *   auto err = src.start("MTC");
+ *   if (err != gme::time::MtcStartError::kOk) {
+ *       // Handle error: log and abort startup.
+ *   }
+ *
+ *   // Query position from any thread:
+ *   long pos = src.getMtcMs();
+ *   bool running = src.isRunning();
+ * @endcode
  */
 
 #pragma once
 
 #include <functional>
 #include <string>
-#include <stdexcept>
 
 namespace gme {
 namespace time {
+
+/**
+ * @brief Error codes returned by MtcTickSource::start().
+ *
+ * Used instead of exceptions to comply with the project constitution
+ * (Performance & Safety Standards: "Exceptions MUST NOT cross library
+ * boundaries").
+ */
+enum class MtcStartError {
+    kOk,                ///< Port opened successfully, MTC reception active.
+    kNoPortsAvailable,  ///< No MIDI ports detected on the system.
+    kPortNotFound       ///< No port name matched the requested substring.
+};
 
 /**
  * @brief Timecode tick source driven by MTC quarter-frame messages.
@@ -71,6 +102,13 @@ public:
      * @param cb  Callable invoked with the current MTC head position (ms).
      *            MUST be lock-free and non-blocking — it fires from the
      *            RtMidi MIDI callback thread.
+     *
+     * @example
+     * @code
+     *   src.setTickCallback([](long ms) {
+     *       engine.evaluateAt(ms);
+     *   });
+     * @endcode
      */
     void setTickCallback(std::function<void(long)> cb);
 
@@ -83,14 +121,23 @@ public:
      *
      * Port selection: scans available RtMidi ports for a port whose name
      * contains @p midiPort (case-sensitive substring match). If exactly
-     * one match is found, that port is opened. If no match is found, throws.
+     * one match is found, that port is opened.
      *
      * @param midiPort  Port name (or substring) to search for and open.
      *
-     * @throws std::runtime_error if no MIDI ports are available, no port
-     *         matching @p midiPort is found, or the port fails to open.
+     * @return MtcStartError::kOk on success.
+     *         MtcStartError::kNoPortsAvailable if no MIDI ports exist.
+     *         MtcStartError::kPortNotFound if no port matches @p midiPort.
+     *
+     * @example
+     * @code
+     *   auto err = src.start("MTC");
+     *   if (err != gme::time::MtcStartError::kOk) {
+     *       logger.error("Failed to open MIDI port");
+     *   }
+     * @endcode
      */
-    void start(const std::string& midiPort);
+    MtcStartError start(const std::string& midiPort);
 
     /**
      * @brief Return the current MTC head position in milliseconds.
@@ -100,6 +147,11 @@ public:
      *
      * @return Current MTC head in milliseconds. Returns 0 if MTC has
      *         never started.
+     *
+     * @example
+     * @code
+     *   long pos = src.getMtcMs();  // 0 before start(), timecode ms after
+     * @endcode
      */
     long getMtcMs() const;
 
@@ -111,6 +163,11 @@ public:
      * running timeout (~100 ms default).
      *
      * @return true if MTC is actively running, false if stopped or not started.
+     *
+     * @example
+     * @code
+     *   if (src.isRunning()) { /* MTC is active */ }
+     * @endcode
      */
     bool isRunning() const;
 };

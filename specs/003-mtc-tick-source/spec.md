@@ -70,7 +70,7 @@ As a developer integrating the MTC extension, I need the quarter-frame callback 
 
 ### Edge Cases
 
-- What happens when `start()` is called with an invalid or unavailable MIDI port name? `start()` throws `std::runtime_error`; the caller (e.g., `GradientEngineApplication`) is responsible for catching, logging, and aborting startup.
+- What happens when `start()` is called with an invalid or unavailable MIDI port name? `start()` returns a `MtcStartError` error code (e.g., `kPortNotFound`, `kNoPortsAvailable`); the caller (e.g., `GradientEngineApplication`) is responsible for checking the return value, logging, and aborting startup.
 - What happens when `setTickCallback()` is called while MTC is already running? `setTickCallback()` is safe to call only before `start()`; calling it after MTC is running is undefined behavior. This is an accepted constraint matching the static-member design of `MtcReceiver`.
 - What happens when `MtcReceiver`'s static members are used by two `MtcTickSource` instances in the same process? This is an accepted constraint (one instance per process); the limitation must be documented.
 - What happens when `getMtcMs()` is called from multiple threads concurrently? The underlying `mtcHead` is a lock-free atomic, so concurrent reads are safe by design.
@@ -80,16 +80,15 @@ As a developer integrating the MTC extension, I need the quarter-frame callback 
 
 ### Functional Requirements
 
-- **FR-001**: The system MUST provide a `MtcTickSource` class in the `gme::time` namespace with `start(const std::string& midiPort)`, `getMtcMs()`, `isRunning()`, and `setTickCallback(std::function<void(long)>)` methods. `start()` MUST throw `std::runtime_error` if the MIDI port cannot be opened.
+- **FR-001**: The system MUST provide a `MtcTickSource` class in the `gme::time` namespace with `start(const std::string& midiPort)`, `getMtcMs()`, `isRunning()`, and `setTickCallback(std::function<void(long)>)` methods. `start()` MUST return a `MtcStartError` enum value indicating success (`kOk`) or the failure mode (`kNoPortsAvailable`, `kPortNotFound`). No exceptions cross the library boundary (Constitution: Performance & Safety Standards).
 - **FR-002**: `MtcTickSource::start()` MUST call `MtcReceiver::setNetworkMode(true)` before opening the MIDI port to enable network MTC reception. `setNetworkMode()` already exists in `mtcreceiver` at commit `63ce3de`; no new addition to the upstream library is needed for this requirement.
-- **FR-003**: The `MtcReceiver` class MUST be extended with a `static std::function<void(long)> onQuarterFrame` member that is invoked after BOTH `mtcHead` update sites inside `decodeQuarterFrame()`.
-- **FR-004**: The tick callback MUST fire from inside `decodeQuarterFrame()` (NOT from `midiCallback()`) so that it always carries a freshly committed MTC head value.
-- **FR-005**: `getMtcMs()` MUST return the value of `MtcReceiver::mtcHead.load()` — a lock-free atomic read, safe to call from any thread.
-- **FR-006**: `isRunning()` MUST return the value of `MtcReceiver::isTimecodeRunning.load()` — a lock-free atomic read.
-- **FR-007**: `setTickCallback()` MUST route the provided callback to `MtcReceiver::onQuarterFrame` so that the MtcReceiver extension and `MtcTickSource` share a single callback registration path.
-- **FR-008**: The implementation MUST NOT introduce any free-running timer; all tick delivery is driven exclusively by incoming MTC quarter-frame MIDI messages.
-- **FR-009**: The one-instance-per-process constraint (arising from `MtcReceiver`'s static members) MUST be documented in `MtcTickSource.h`.
-- **FR-010**: `setTickCallback()` MUST be called only before `start()`; the implementation MAY assert or document this precondition but is not required to protect against concurrent callback replacement at runtime.
+- **FR-003**: The `MtcReceiver` class MUST be extended with a `static std::function<void(long)> onQuarterFrame` member that is invoked after BOTH `mtcHead` update sites inside `decodeQuarterFrame()`. The callback MUST NOT fire from `midiCallback()` or `decodeFullFrame()`.
+- **FR-004**: `getMtcMs()` MUST return the value of `MtcReceiver::mtcHead.load()` — a lock-free atomic read, safe to call from any thread.
+- **FR-005**: `isRunning()` MUST return the value of `MtcReceiver::isTimecodeRunning.load()` — a lock-free atomic read.
+- **FR-006**: `setTickCallback()` MUST route the provided callback to `MtcReceiver::onQuarterFrame` so that the MtcReceiver extension and `MtcTickSource` share a single callback registration path.
+- **FR-007**: The implementation MUST NOT introduce any free-running timer; all tick delivery is driven exclusively by incoming MTC quarter-frame MIDI messages.
+- **FR-008**: The one-instance-per-process constraint (arising from `MtcReceiver`'s static members) MUST be documented in `MtcTickSource.h`.
+- **FR-009**: `setTickCallback()` MUST be called only before `start()`; the implementation MAY assert or document this precondition but is not required to protect against concurrent callback replacement at runtime.
 
 ### Key Entities
 
@@ -120,5 +119,5 @@ As a developer integrating the MTC extension, I need the quarter-frame callback 
 ### Session 2026-04-16
 
 - Q: What is the target state for the `mtcreceiver` submodule pin after this phase? → A: Commit `63ce3de` is already the HEAD of `main` after the upstream `master→main` rename; the submodule update task only needs to fetch and fix the local tracking branch. The `onQuarterFrame` extension is handled as a separate upstream commit; the submodule pin is then advanced to that new commit.
-- Q: How should `MtcTickSource::start()` report a failure to open the MIDI port? → A: Throw `std::runtime_error`; the application layer catches, logs, and aborts startup.
+- Q: How should `MtcTickSource::start()` report a failure to open the MIDI port? → A: Return a `MtcStartError` enum value (`kNoPortsAvailable`, `kPortNotFound`); the application layer checks the return value, logs, and aborts startup. No exceptions cross the library boundary per Constitution Performance & Safety Standards.
 - Q: What is the thread-safety contract for `setTickCallback()`? → A: Initialization-time only (before `start()`); concurrent replacement during live MTC is undefined behavior — accepted constraint, no mutex needed.

@@ -18,12 +18,12 @@
 
 ### Public Interface
 
-| Method | Signature | Precondition | Throws |
-|--------|-----------|--------------|--------|
+| Method | Signature | Precondition | Returns |
+|--------|-----------|--------------|---------|
 | `setTickCallback` | `void setTickCallback(std::function<void(long)> cb)` | Must be called before `start()` | — |
-| `start` | `void start(const std::string& midiPort)` | `setTickCallback()` already called | `std::runtime_error` if port not found or MIDI open fails |
-| `getMtcMs` | `long getMtcMs() const` | None (safe before `start()`) | — |
-| `isRunning` | `bool isRunning() const` | None (safe before `start()`) | — |
+| `start` | `MtcStartError start(const std::string& midiPort)` | `setTickCallback()` already called | `MtcStartError::kOk` on success; `kNoPortsAvailable` or `kPortNotFound` on failure |
+| `getMtcMs` | `long getMtcMs() const` | None (safe before `start()`) | Current MTC head in ms (0 if never started) |
+| `isRunning` | `bool isRunning() const` | None (safe before `start()`) | `true` if MTC running, `false` otherwise |
 
 ### Constraints
 
@@ -47,9 +47,9 @@
 
 ### Constructor Extension
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `portIndex` | `unsigned int` | `0` | RtMidi port index to open. Default preserves backward compatibility. |
+| Parameter | Type | Default | Position | Description |
+|-----------|------|---------|----------|-------------|
+| `portIndex` | `unsigned int` | `0` | Last (after `queueSizeLimit`) | RtMidi port index to open. Appended after existing params to preserve positional backward compatibility. |
 
 ### Callback Invocation Sites
 

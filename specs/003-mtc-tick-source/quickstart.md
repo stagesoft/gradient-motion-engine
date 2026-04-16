@@ -45,7 +45,11 @@ int main() {
     });
 
     // Replace "MTC" with the actual substring of your MIDI port name
-    src.start("MTC");
+    auto err = src.start("MTC");
+    if (err != gme::time::MtcStartError::kOk) {
+        std::cerr << "Failed to open MIDI port\n";
+        return 1;
+    }
 
     std::this_thread::sleep_for(std::chrono::seconds(5));
 
@@ -68,7 +72,7 @@ int main() {
 | `isRunning()` while MTC active | `true` |
 | `isRunning()` after MTC stops (>100 ms) | `false` |
 | `getMtcMs()` before `start()` | `0` |
-| `start("nonexistent-port")` | throws `std::runtime_error` |
+| `start("nonexistent-port")` | returns `MtcStartError::kPortNotFound` |
 
 ---
 
@@ -92,9 +96,9 @@ Leave `onQuarterFrame` unset and invoke the callback guard path — verify no cr
 
 Construct `MtcTickSource` without calling `start()`. Call `getMtcMs()` — expect `0`.
 
-### Scenario E: Invalid port throws
+### Scenario E: Invalid port returns error
 
-Call `start("__no_such_port__")` when no matching MIDI port exists — expect `std::runtime_error`.
+Call `start("__no_such_port__")` when no matching MIDI port exists — expect `MtcStartError::kPortNotFound`.
 
 ---
 

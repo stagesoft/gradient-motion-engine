@@ -43,18 +43,18 @@ The callback is NOT called from `decodeFullFrame()` — that SysEx path is for s
 
 ## Decision 3: Port selection in `MtcTickSource::start(portName)`
 
-**Decision**: `MtcTickSource::start(const std::string& portName)` uses the `portName` parameter to find the matching RtMidi port index via `RtMidiIn::getPortCount()` / `getPortName(i)`. If no matching port is found, throw `std::runtime_error`. The upstream `MtcReceiver` constructor is extended to accept an optional `unsigned int portIndex` parameter (defaulting to 0) so that `MtcTickSource` can pass the resolved index.
+**Decision**: `MtcTickSource::start(const std::string& portName)` uses the `portName` parameter to find the matching RtMidi port index via `RtMidiIn::getPortCount()` / `getPortName(i)`. If no matching port is found, return `MtcStartError::kPortNotFound`. If no ports exist at all, return `MtcStartError::kNoPortsAvailable`. No exceptions cross the library boundary (Constitution: Performance & Safety Standards). The upstream `MtcReceiver` constructor is extended to accept an optional `unsigned int portIndex` parameter **appended after existing parameters** (defaulting to 0) so that `MtcTickSource` can pass the resolved index.
 
 The `MtcReceiver` extension to the constructor signature:
 ```cpp
-MtcReceiver(unsigned int portIndex = 0,
-            RtMidi::Api api = MTCRECV_DEFAULT_API,
+MtcReceiver(RtMidi::Api api = MTCRECV_DEFAULT_API,
             const std::string& clientName = "Cuems Mtc Receiver",
-            unsigned int queueSizeLimit = 100);
+            unsigned int queueSizeLimit = 100,
+            unsigned int portIndex = 0);
 ```
 Port scanning is done in `MtcTickSource::start()` before constructing `MtcReceiver`, using a temporary `RtMidiIn` probe instance.
 
-**Rationale**: Hardcoding port 0 would make `--midi-port NAME` CLI argument a no-op. Scanning by name before construction is the RtMidi idiomatic pattern (used in many RtMidi examples). The `portIndex` default of 0 preserves backward compatibility with all existing `MtcReceiver` users (e.g., VideoComposer's own usage).
+**Rationale**: Hardcoding port 0 would make `--midi-port NAME` CLI argument a no-op. Scanning by name before construction is the RtMidi idiomatic pattern (used in many RtMidi examples). The `portIndex` default of 0 preserves backward compatibility with all existing `MtcReceiver` users (e.g., VideoComposer's own usage). Placing `portIndex` **after** the existing parameters preserves positional compatibility — callers passing `RtMidi::Api` as the first positional argument continue to work without modification. Error reporting uses a `MtcStartError` enum instead of exceptions to comply with the constitution's exception boundary rule.
 
 **Alternatives considered**:
 - Keep port 0 hardcoded for Phase 2: rejected — the `start(portName)` interface in the spec makes port selection an explicit requirement; hardcoding would require a follow-up upstream change anyway.

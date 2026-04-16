@@ -17,7 +17,7 @@ Implement `gme::time::MtcTickSource` — a thin adapter over the `MtcReceiver` M
 **Primary Dependencies**:
 - `librtmidi-dev` >= 5.0 — MIDI/MTC reception (via `mtcreceiver` submodule)
 - `libasound2-dev` — ALSA MIDI backend
-- C++ standard library only: `<functional>`, `<atomic>`, `<memory>`, `<string>`, `<stdexcept>`
+- C++ standard library only: `<functional>`, `<atomic>`, `<memory>`, `<string>`
 
 **Storage**: N/A  
 **Testing**: `cmake --build build --target test` (CTest), `tests/test_mtc_tick_source.cpp`  
@@ -40,7 +40,12 @@ Implement `gme::time::MtcTickSource` — a thin adapter over the `MtcReceiver` M
 | **III. Library-First** | ✅ Pass (justified) | `MtcTickSource` lives in `libgradient_motion/src/time/`. RtMidi linkage is resolved at the daemon executable link step — the library archive itself does not carry RtMidi as a PUBLIC link dependency. See Complexity Tracking. |
 | **IV. Real-Time Safety** | ✅ Pass | The callback is a `std::function` invocation — no allocation in steady state (callback pointer is set once at init). `getMtcMs()` and `isRunning()` are atomic loads. |
 | **V. Protocol-Agnostic Core** | ✅ Pass | `gme::time` does not reference OSC, NNG, or any transport protocol. It emits `long` ms values. |
-| **VI. Documentation Standards** | ✅ Pass | All public methods of `MtcTickSource` documented per contract (see `contracts/MtcTickSource.h`). Doxygen-compatible docstrings required in implementation headers. |
+| **VI. Documentation Standards** | ✅ Pass | All public methods of `MtcTickSource` documented per contract (see `contracts/MtcTickSource.h`) with usage examples. Doxygen-compatible docstrings required in implementation headers. |
+| **Perf: Zero heap alloc** | ✅ Pass | Callback pointer set once at init; atomic loads in steady state. No allocation per tick. |
+| **Perf: Latency < 1 ms** | ✅ Pass | `std::function` call + atomic load well under 1 ms on reference hardware. |
+| **Perf: Exception boundary** | ✅ Pass | `start()` returns `MtcStartError` enum; no exceptions cross library boundary. |
+| **Perf: Thread safety docs** | ✅ Pass | Contract documents per-method thread safety (init-time vs any-thread). |
+| **Perf: Build reproducibility** | ✅ Pass | Compiler flags and dependency versions pinned in CMakeLists.txt. |
 
 ---
 
@@ -69,7 +74,7 @@ These changes are committed to a new branch `feat/quarter-frame-callback` on the
 ```text
 mtcreceiver/
 ├── mtcreceiver.h          ← ADD: static std::function<void(long)> onQuarterFrame (public)
-│                             MODIFY: constructor signature — add portIndex param (default 0)
+│                             MODIFY: constructor signature — append portIndex param (default 0) after existing params
 └── mtcreceiver.cpp        ← MODIFY: decodeQuarterFrame() — call onQuarterFrame after both
 │                                     mtcHead.store() sites (lines ~281 and ~299)
 │                             MODIFY: constructor — use portIndex instead of hardcoded 0
@@ -140,13 +145,16 @@ if (onQuarterFrame) onQuarterFrame(mtcHead.load());   // ← ADD
 ### `MtcTickSource::start()` implementation sketch
 
 ```cpp
-void MtcTickSource::start(const std::string& midiPort) {
+MtcStartError MtcTickSource::start(const std::string& midiPort) {
     // Enable network mode BEFORE constructing MtcReceiver
     MtcReceiver::setNetworkMode(true);
 
     // Scan available ports for name match
     RtMidiIn probe;
     unsigned int nPorts = probe.getPortCount();
+    if (nPorts == 0) {
+        return MtcStartError::kNoPortsAvailable;
+    }
     unsigned int portIndex = UINT_MAX;
     for (unsigned int i = 0; i < nPorts; ++i) {
         if (probe.getPortName(i).find(midiPort) != std::string::npos) {
@@ -155,11 +163,14 @@ void MtcTickSource::start(const std::string& midiPort) {
         }
     }
     if (portIndex == UINT_MAX) {
-        throw std::runtime_error("MtcTickSource: MIDI port not found: " + midiPort);
+        return MtcStartError::kPortNotFound;
     }
 
     // Construct MtcReceiver — opens port, starts checker thread
-    receiver_ = std::make_unique<MtcReceiver>(portIndex);
+    // portIndex is the last constructor parameter (after api, clientName, queueSizeLimit)
+    receiver_ = std::make_unique<MtcReceiver>(
+        MTCRECV_DEFAULT_API, "Cuems Mtc Receiver", 100, portIndex);
+    return MtcStartError::kOk;
 }
 ```
 
