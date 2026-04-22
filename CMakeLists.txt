@@ -62,6 +62,9 @@ if(BUILD_DAEMON)
         add_subdirectory(cuemslogger)
     endif()
 
+    # Enable test-only helpers so the test suite can use invokeTickForTesting
+    # and the SkipPortOpenTag constructor (FR-007).
+    set(MTCRECV_TESTING ON CACHE BOOL "Expose mtcreceiver test-only helpers" FORCE)
     add_subdirectory(mtcreceiver)
 
     if(ENABLE_CUEMS_LOGGER)

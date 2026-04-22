@@ -2,32 +2,29 @@
  * @file MtcTickSource.h
  * @brief Timecode tick source driven by MTC quarter-frame messages.
  *
- * Wraps MtcReceiver's static-member interface behind an OO facade. Owns the
- * MIDI port lifecycle and routes the quarter-frame callback to downstream
- * consumers (e.g., GradientEngine).
+ * Thin adapter over mtcreceiver v2.0.0. Exposes a `void(long)` callback
+ * interface while internally translating to v2.0.0's `void(long, bool)`
+ * signature and ignoring the `isCompleteFrame` flag.
  *
- * ## Initialization order
+ * ## Lifecycle contract
  *
- * The caller MUST follow this sequence:
- *   1. setTickCallback(cb)   — register the tick handler
+ *   1. setTickCallback(cb)   — register the tick handler (or {} to clear)
  *   2. start(midiPort)       — open the MIDI port and begin receiving
- *
- * Calling start() before setTickCallback() is legal; ticks will be silently
- * discarded until a callback is registered (MtcReceiver null-checks it).
+ *   3. ~MtcTickSource()      — deregister; blocks until any in-flight
+ *                              invocation returns (v2.0.0 guarantee).
  *
  * ## Thread safety
  *
- * - getMtcMs() and isRunning() are safe from any thread at any time.
- * - setTickCallback() and start() are initialization-time methods and MUST
- *   NOT be called concurrently.
- * - The registered callback fires from the RtMidi MIDI callback thread and
- *   MUST be lock-free and non-blocking.
+ * - getMtcMs() and isRunning() are safe from any thread.
+ * - setTickCallback() is thread-safe (v2.0.0 adds an internal mutex).
+ * - The registered callback fires from the RtMidi MIDI callback thread
+ *   and MUST be lock-free and non-blocking.
  *
- * ## One-instance constraint (FR-009)
+ * ## One-instance constraint (spec 004 FR-009, carry-forward from spec 003)
  *
- * MtcReceiver uses process-global static members. Only one MtcTickSource
- * may exist per process at a time. Constructing a second instance produces
- * undefined behavior.
+ * MtcReceiver uses process-global static members for its callback slot
+ * and decoder state. Only one MtcTickSource may exist per process at a
+ * time. Constructing a second instance produces undefined behaviour.
  *
  * @example Typical usage:
  * @code
@@ -81,30 +78,42 @@ enum class MtcStartError {
 class MtcTickSource {
 public:
     MtcTickSource() = default;
-    ~MtcTickSource() = default;
+
+    /**
+     * @brief Deregister the callback (via MtcReceiver::setTickCallback({}))
+     *        and release the MIDI port.
+     *
+     * Blocks until any in-flight callback invocation returns. After this
+     * destructor returns, no consumer callback may be invoked — this is
+     * the "no call after dtor" guarantee required by FR-004 / SC-004.
+     */
+    ~MtcTickSource();
 
     // Non-copyable, non-movable (owns a unique hardware resource)
     MtcTickSource(const MtcTickSource&) = delete;
     MtcTickSource& operator=(const MtcTickSource&) = delete;
 
     /**
-     * @brief Register the quarter-frame tick callback.
+     * @brief Register (or deregister) the quarter-frame tick callback.
      *
-     * The callback fires on every MTC quarter-frame decode, carrying the
-     * current MTC head position in milliseconds. At 25 fps it fires at
-     * 200 Hz (8 quarter frames per video frame).
+     * The callback fires once per MTC quarter frame (at the QF rate —
+     * 100 Hz at 25 fps). The `isCompleteFrame` flag introduced by
+     * mtcreceiver v2.0.0 is ignored by this adapter; consumers see only
+     * the current MTC head position in milliseconds.
      *
-     * Must be called before start(). Registering a callback after start() is
-     * undefined behavior. The callback MUST be lock-free and non-blocking —
+     * Thread-safe: may be called at any time, from any thread. Replacing
+     * an already-registered callback atomically swaps the stored closure
+     * inside mtcreceiver. The callback MUST be lock-free and non-blocking —
      * it fires from the RtMidi MIDI callback thread.
      *
      * @param cb  Callable invoked with the current MTC head position (ms).
+     *            Pass an empty std::function to deregister.
      *
      * @example
      * @code
-     *   src.setTickCallback([](long ms) {
-     *       engine.evaluateAt(ms);
-     *   });
+     *   src.setTickCallback([](long ms) { engine.evaluateAt(ms); });
+     *   // ... later, to stop receiving:
+     *   src.setTickCallback({});
      * @endcode
      */
     void setTickCallback(std::function<void(long)> cb);

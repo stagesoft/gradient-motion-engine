@@ -25,5 +25,7 @@ target_link_libraries(test_mtc_tick_source PRIVATE
     rtmidi
 )
 
+target_compile_definitions(test_mtc_tick_source PRIVATE MTCRECV_TESTING)
+
 add_test(NAME test_mtc_tick_source COMMAND test_mtc_tick_source)
 set_tests_properties(test_mtc_tick_source PROPERTIES LABELS "unit")

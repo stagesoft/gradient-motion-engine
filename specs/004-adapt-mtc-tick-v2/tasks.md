@@ -18,7 +18,7 @@
 
 **Purpose**: Confirm the workspace is hygienic before any submodule or source changes. The build environment itself is already configured from spec 003; no tooling installation is needed.
 
-- [ ] T001 [P] Verify workspace hygiene: `git status` shows no unexpected modifications inside `mtcreceiver/`, `src/time/`, or `tests/`; `git submodule status` confirms the mtcreceiver submodule is initialised (no `-` prefix)
+- [x] T001 [P] Verify workspace hygiene: `git status` shows no unexpected modifications inside `mtcreceiver/`, `src/time/`, or `tests/`; `git submodule status` confirms the mtcreceiver submodule is initialised (no `-` prefix)
 
 ---
 
@@ -28,8 +28,8 @@
 
 **⚠️ CRITICAL**: No user story implementation work can begin until this phase is complete.
 
-- [ ] T002 Bump `mtcreceiver/` submodule to commit `59fc76e` (v2.0.0): run `git -C mtcreceiver fetch origin`, `git -C mtcreceiver checkout 59fc76e`, then `git add mtcreceiver` from the repo root (FR-001)
-- [ ] T003 [P] Add `target_compile_definitions(test_mtc_tick_source PRIVATE MTCRECV_TESTING)` to `tests/CMakeLists.txt` — enables `invokeTickForTesting`, `SkipPortOpenTag`, and the decoder-reset helpers on the test target only, not on the library or daemon (FR-007)
+- [x] T002 Bump `mtcreceiver/` submodule to commit `59fc76e` (v2.0.0): run `git -C mtcreceiver fetch origin`, `git -C mtcreceiver checkout 59fc76e`, then `git add mtcreceiver` from the repo root (FR-001)
+- [x] T003 [P] Add `target_compile_definitions(test_mtc_tick_source PRIVATE MTCRECV_TESTING)` to `tests/CMakeLists.txt` — enables `invokeTickForTesting`, `SkipPortOpenTag`, and the decoder-reset helpers on the test target only, not on the library or daemon (FR-007)
 
 **Checkpoint**: Submodule pointer updated, test target configured for the testing helpers. Compilation of `src/` will break (expected) until US2 adapter lands; tests will break until US4 rewrite lands.
 
@@ -43,7 +43,7 @@
 
 > Note: Full clean-build verification (US1 Acceptance Scenario 2) requires US2 to be complete. T004 validates the pin itself; T022 (Polish) validates the full build.
 
-- [ ] T004 [US1] Verify `git -C mtcreceiver rev-parse HEAD` returns `59fc76e` and that `mtcreceiver/mtcreceiver.h` contains `setTickCallback` (grep confirms the v2.0.0 header is in place)
+- [x] T004 [US1] Verify `git -C mtcreceiver rev-parse HEAD` returns `59fc76e` and that `mtcreceiver/mtcreceiver.h` contains `setTickCallback` (grep confirms the v2.0.0 header is in place)
 
 **Checkpoint**: Submodule pin confirmed at v2.0.0.
 
@@ -55,8 +55,8 @@
 
 **Independent Test**: After this phase the project must compile. The concurrency test in US4 (T019) will exercise US2 Acceptance Scenario 3 (multi-thread registration) — because `MTCRECV_TESTING` is already enabled by T003, US2's independent test is runnable as soon as T019 lands.
 
-- [ ] T005 [US2] Rewrite `MtcTickSource::setTickCallback()` in `src/time/MtcTickSource.cpp`: replace `MtcReceiver::onQuarterFrame = std::move(cb)` with the v2.0.0 adapter — truthy `cb` → register adapter lambda `[cb=std::move(cb)](long ms, bool) { cb(ms); }` via `MtcReceiver::setTickCallback()`; falsy `cb` → call `MtcReceiver::setTickCallback({})` (FR-002, FR-003)
-- [ ] T006 [P] [US2] Update `setTickCallback` Doxygen docstring in `src/time/MtcTickSource.h`: remove "must call before start()" restriction (now thread-safe per v2.0.0), state that `isCompleteFrame` is ignored, correct QF rate from "200 Hz" to "100 Hz at 25 fps" in `@brief` and `@example` (Principle VI / FR-002)
+- [x] T005 [US2] Rewrite `MtcTickSource::setTickCallback()` in `src/time/MtcTickSource.cpp`: replace `MtcReceiver::onQuarterFrame = std::move(cb)` with the v2.0.0 adapter — truthy `cb` → register adapter lambda `[cb=std::move(cb)](long ms, bool) { cb(ms); }` via `MtcReceiver::setTickCallback()`; falsy `cb` → call `MtcReceiver::setTickCallback({})` (FR-002, FR-003)
+- [x] T006 [P] [US2] Update `setTickCallback` Doxygen docstring in `src/time/MtcTickSource.h`: remove "must call before start()" restriction (now thread-safe per v2.0.0), state that `isCompleteFrame` is ignored, correct QF rate from "200 Hz" to "100 Hz at 25 fps" in `@brief` and `@example` (Principle VI / FR-002)
 
 **Checkpoint**: Project now compiles against v2.0.0 (US1 full-build acceptance satisfied). `setTickCallback` is wired to the new API.
 
@@ -68,9 +68,9 @@
 
 **Independent Test**: After this phase: wrap `MtcTickSource` lifetime in a block, fire `invokeTickForTesting` from outside the block — consumer callback count must not increase post-destruction (verified by T024 in Polish).
 
-- [ ] T007 [US3] Replace `~MtcTickSource() = default;` with `~MtcTickSource();` declaration in `src/time/MtcTickSource.h` (FR-004)
-- [ ] T008 [US3] Add explicit destructor definition in `src/time/MtcTickSource.cpp`: body calls `MtcReceiver::setTickCallback({})` unconditionally before any other teardown (FR-004)
-- [ ] T009 [P] [US3] Add Doxygen `~MtcTickSource()` docstring in `src/time/MtcTickSource.h` documenting: deregisters callback via `setTickCallback({})`, blocks until in-flight invocation returns, guarantees no-call-after-dtor (Principle VI / SC-004)
+- [x] T007 [US3] Replace `~MtcTickSource() = default;` with `~MtcTickSource();` declaration in `src/time/MtcTickSource.h` (FR-004)
+- [x] T008 [US3] Add explicit destructor definition in `src/time/MtcTickSource.cpp`: body calls `MtcReceiver::setTickCallback({})` unconditionally before any other teardown (FR-004)
+- [x] T009 [P] [US3] Add Doxygen `~MtcTickSource()` docstring in `src/time/MtcTickSource.h` documenting: deregisters callback via `setTickCallback({})`, blocks until in-flight invocation returns, guarantees no-call-after-dtor (Principle VI / SC-004)
 
 **Checkpoint**: `MtcTickSource` lifecycle is safe for multi-threaded teardown.
 
@@ -86,43 +86,43 @@
 
 ### Rewrite test harness infrastructure
 
-- [ ] T010 [US4] Rewrite `resetMtcState()` in `tests/test_mtc_tick_source.cpp`: delete all `MtcReceiver::onQuarterFrame = nullptr` assignments (member no longer exists), replace with `MtcReceiver::setTickCallback({})` and `MtcReceiver::resetStaticStateForTesting()`, and reset `MtcReceiver::mtcHead` and `MtcReceiver::isTimecodeRunning` atomics (FR-005)
+- [x] T010 [US4] Rewrite `resetMtcState()` in `tests/test_mtc_tick_source.cpp`: delete all `MtcReceiver::onQuarterFrame = nullptr` assignments (member no longer exists), replace with `MtcReceiver::setTickCallback({})` and `MtcReceiver::resetStaticStateForTesting()`, and reset `MtcReceiver::mtcHead` and `MtcReceiver::isTimecodeRunning` atomics (FR-005)
 
 ### Rewrite Scenario A
 
-- [ ] T011 [US4] Rewrite `testScenarioA_callbackInvocation` in `tests/test_mtc_tick_source.cpp`: replace `MtcReceiver::onQuarterFrame(1234L)` with 8 `invokeTickForTesting` calls using the 7×`false`+1×`true` pattern (FR-005, FR-008); assert callback received the last delivered ms value
+- [x] T011 [US4] Rewrite `testScenarioA_callbackInvocation` in `tests/test_mtc_tick_source.cpp`: replace `MtcReceiver::onQuarterFrame(1234L)` with 8 `invokeTickForTesting` calls using the 7×`false`+1×`true` pattern (FR-005, FR-008); assert callback received the last delivered ms value
 
 ### Rewrite Scenario B (repurposed to single-fire contract)
 
-- [ ] T012 [US4] Rewrite `testScenarioB_bothSitesFire` into `testScenarioB_singleFirePerQF` in `tests/test_mtc_tick_source.cpp`: call `invokeTickForTesting` N times with mixed flag values (at least one `false` and one `true`); assert consumer callback count equals exactly N (one invocation per call, no double-fires) and that the `true`-flag call also produces exactly one invocation (FR-005)
+- [x] T012 [US4] Rewrite `testScenarioB_bothSitesFire` into `testScenarioB_singleFirePerQF` in `tests/test_mtc_tick_source.cpp`: call `invokeTickForTesting` N times with mixed flag values (at least one `false` and one `true`); assert consumer callback count equals exactly N (one invocation per call, no double-fires) and that the `true`-flag call also produces exactly one invocation (FR-005)
 
 ### Rewrite Scenario C
 
-- [ ] T013 [US4] Rewrite `testScenarioC_nullCallbackSafe` in `tests/test_mtc_tick_source.cpp`: with no callback registered (or registered as `{}`), call `invokeTickForTesting(999L, false)` and assert no crash. The v2.0.0 API null-checks internally, so the test simply invokes the helper; no consumer-side guard is required (FR-005, FR-008)
+- [x] T013 [US4] Rewrite `testScenarioC_nullCallbackSafe` in `tests/test_mtc_tick_source.cpp`: with no callback registered (or registered as `{}`), call `invokeTickForTesting(999L, false)` and assert no crash. The v2.0.0 API null-checks internally, so the test simply invokes the helper; no consumer-side guard is required (FR-005, FR-008)
 
 ### Rewrite Scenario D
 
-- [ ] T014 [P] [US4] Update `testScenarioD_queryBeforeStart` in `tests/test_mtc_tick_source.cpp`: remove any `onQuarterFrame` reference; logic (getMtcMs()==0, isRunning()==false before start()) is unchanged — verify it still compiles and passes (FR-005)
+- [x] T014 [P] [US4] Update `testScenarioD_queryBeforeStart` in `tests/test_mtc_tick_source.cpp`: remove any `onQuarterFrame` reference; logic (getMtcMs()==0, isRunning()==false before start()) is unchanged — verify it still compiles and passes (FR-005)
 
 ### Rewrite Scenario E
 
-- [ ] T015 [P] [US4] Update `testScenarioE_invalidPortReturnsError` in `tests/test_mtc_tick_source.cpp`: remove any `onQuarterFrame` reference from setup; `start("__no_such_port__")` logic is unchanged — verify it still compiles and passes (FR-005)
+- [x] T015 [P] [US4] Update `testScenarioE_invalidPortReturnsError` in `tests/test_mtc_tick_source.cpp`: remove any `onQuarterFrame` reference from setup; `start("__no_such_port__")` logic is unchanged — verify it still compiles and passes (FR-005)
 
 ### Rewrite synthetic-stream test
 
-- [ ] T016 [US4] Rewrite `testSyntheticMtcStream` in `tests/test_mtc_tick_source.cpp`: replace every `MtcReceiver::onQuarterFrame(ms)` call with `invokeTickForTesting(ms, isCompleteFrame)` using the 7×`false`+1×`true` pattern repeating every 8 QFs; drive exactly 1200 calls at 10 ms intervals (kExpectedMs = 12000); assert `count == 1200` and `|getMtcMs() − 12000| ≤ 1`; remove the multi-paragraph stale 60 s comment block (FR-005, FR-006, FR-008, SC-003)
+- [x] T016 [US4] Rewrite `testSyntheticMtcStream` in `tests/test_mtc_tick_source.cpp`: replace every `MtcReceiver::onQuarterFrame(ms)` call with `invokeTickForTesting(ms, isCompleteFrame)` using the 7×`false`+1×`true` pattern repeating every 8 QFs; drive exactly 1200 calls at 10 ms intervals (kExpectedMs = 12000); assert `count == 1200` and `|getMtcMs() − 12000| ≤ 1`; remove the multi-paragraph stale 60 s comment block (FR-005, FR-006, FR-008, SC-003)
 
 ### Add latency instrumentation (SC-006)
 
-- [ ] T017 [US4] Extend `testSyntheticMtcStream` in `tests/test_mtc_tick_source.cpp` (or add a sibling `testSyntheticMtcStream_latency`) to measure per-call dispatch latency: record `std::chrono::steady_clock::now()` immediately before each `invokeTickForTesting` call and immediately after the consumer callback returns (capture `now()` inside the registered callback); collect 1200 deltas into a `std::vector<long long>`; after the loop, sort and compute the p99; assert p99 < 1 000 000 ns (1 ms). Report min, median, p99, and max in the PASS/FAIL message (SC-006, FR-010-adjacent)
+- [x] T017 [US4] Extend `testSyntheticMtcStream` in `tests/test_mtc_tick_source.cpp` (or add a sibling `testSyntheticMtcStream_latency`) to measure per-call dispatch latency: record `std::chrono::steady_clock::now()` immediately before each `invokeTickForTesting` call and immediately after the consumer callback returns (capture `now()` inside the registered callback); collect 1200 deltas into a `std::vector<long long>`; after the loop, sort and compute the p99; assert p99 < 1 000 000 ns (1 ms). Report min, median, p99, and max in the PASS/FAIL message (SC-006, FR-010-adjacent)
 
 ### Add no-call-after-dtor regression test (SC-004)
 
-- [ ] T018 [US4] Add `testScenarioF_noCallAfterDestruction` in `tests/test_mtc_tick_source.cpp`: register a callback that increments an atomic counter; destroy the `MtcTickSource` by letting it go out of scope; snapshot the counter value; call `invokeTickForTesting(1L, false)` and `invokeTickForTesting(2L, true)`; assert counter is unchanged after both calls (SC-004)
+- [x] T018 [US4] Add `testScenarioF_noCallAfterDestruction` in `tests/test_mtc_tick_source.cpp`: register a callback that increments an atomic counter; destroy the `MtcTickSource` by letting it go out of scope; snapshot the counter value; call `invokeTickForTesting(1L, false)` and `invokeTickForTesting(2L, true)`; assert counter is unchanged after both calls (SC-004)
 
 ### Add multi-thread registration regression test (US2 AS-3, FR-010)
 
-- [ ] T019 [US4] Add `testScenarioG_concurrentRegistration` in `tests/test_mtc_tick_source.cpp` covering **US2 Acceptance Scenario 3** and **FR-010**: main thread constructs a `MtcTickSource` and fires `invokeTickForTesting` in a tight loop (≥10 000 iterations); a spawned worker thread alternates `src.setTickCallback(cb)` and `src.setTickCallback({})` on a schedule at least 100 times; after both threads join, assert no crash and that exactly one of two outcomes holds at each tick: either no callback fires or exactly one callback fires (never two). Designed to be clean under TSan (see T023) — the adapter itself serialises on mtcreceiver's internal mutex (FR-010, US2 AS-3)
+- [x] T019 [US4] Add `testScenarioG_concurrentRegistration` in `tests/test_mtc_tick_source.cpp` covering **US2 Acceptance Scenario 3** and **FR-010**: main thread constructs a `MtcTickSource` and fires `invokeTickForTesting` in a tight loop (≥10 000 iterations); a spawned worker thread alternates `src.setTickCallback(cb)` and `src.setTickCallback({})` on a schedule at least 100 times; after both threads join, assert no crash and that exactly one of two outcomes holds at each tick: either no callback fires or exactly one callback fires (never two). Designed to be clean under TSan (see T023) — the adapter itself serialises on mtcreceiver's internal mutex (FR-010, US2 AS-3)
 
 **Checkpoint**: All test scenarios (A, B, C, D, E, F, G, synthetic stream) compile and pass under `ctest`.
 
@@ -132,14 +132,14 @@
 
 **Purpose**: Final build validation, sanitiser runs, docstring audit, and acceptance evidence for all six success criteria.
 
-- [ ] T020 [P] Clean rebuild and zero-warnings check: `cmake --build build --clean-first 2>&1 | tee build.log; grep -iE 'error:|warning:.*mtcreceiver' build.log` — confirm zero errors and zero mtcreceiver-related warnings (SC-001)
-- [ ] T021 [P] Run full test suite: `ctest --test-dir build --output-on-failure` and confirm the `test_mtc_tick_source` binary alone completes within 30 s wall-clock (SC-002)
-- [ ] T022 Verify SC-003 acceptance: inspect `testSyntheticMtcStream` output for exact count 1200 and final MTC head within ±1 ms of 12000 ms (SC-003)
-- [ ] T023 Run TSan build and verify zero data-race reports (SC-005): add a dedicated build directory `build-tsan` configured with `-DCMAKE_CXX_FLAGS="-fsanitize=thread -g -O1"` and `-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=thread`; rebuild `test_mtc_tick_source`; run it with `TSAN_OPTIONS="halt_on_error=1 second_deadlock_stack=1"`; grep output for `WARNING: ThreadSanitizer`. Pass = zero warnings in `MtcTickSource` and `MtcReceiver` frames. T019 (concurrent registration scenario) is the primary exerciser (SC-005)
-- [ ] T024 Verify SC-004 (no-call-after-dtor) under the same TSan build from T023 — confirm `testScenarioF_noCallAfterDestruction` passes with zero sanitiser reports; document any AddressSanitizer follow-up if use-after-free is suspected (SC-004)
-- [ ] T025 Verify SC-006 (p99 latency < 1 ms): review T017 output; if p99 exceeds the budget, record measured values in quickstart.md and open a follow-up issue rather than masking the regression (SC-006)
-- [ ] T026 [P] Audit `src/time/MtcTickSource.h` and `src/time/MtcTickSource.cpp` for any remaining v1 references: grep for `onQuarterFrame`, `"200 Hz"`, `"before start()"`, `"must be called before start"` — each must be absent or updated. Also confirm the "One-instance constraint" docstring block is preserved in `MtcTickSource.h` (FR-009 carry-forward) (Principle VI, FR-009)
-- [ ] T027 [P] Verify `git -C mtcreceiver rev-parse HEAD` still returns `59fc76e` after all changes (guard against accidental submodule drift during the feature branch)
+- [x] T020 [P] Clean rebuild and zero-warnings check: `cmake --build build --clean-first 2>&1 | tee build.log; grep -iE 'error:|warning:.*mtcreceiver' build.log` — confirm zero errors and zero mtcreceiver-related warnings (SC-001)
+- [x] T021 [P] Run full test suite: `ctest --test-dir build --output-on-failure` and confirm the `test_mtc_tick_source` binary alone completes within 30 s wall-clock (SC-002)
+- [x] T022 Verify SC-003 acceptance: inspect `testSyntheticMtcStream` output for exact count 1200 and final MTC head within ±1 ms of 12000 ms (SC-003)
+- [x] T023 Run TSan build and verify zero data-race reports (SC-005): add a dedicated build directory `build-tsan` configured with `-DCMAKE_CXX_FLAGS="-fsanitize=thread -g -O1"` and `-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=thread`; rebuild `test_mtc_tick_source`; run it with `TSAN_OPTIONS="halt_on_error=1 second_deadlock_stack=1"`; grep output for `WARNING: ThreadSanitizer`. Pass = zero warnings in `MtcTickSource` and `MtcReceiver` frames. T019 (concurrent registration scenario) is the primary exerciser (SC-005)
+- [x] T024 Verify SC-004 (no-call-after-dtor) under the same TSan build from T023 — confirm `testScenarioF_noCallAfterDestruction` passes with zero sanitiser reports; document any AddressSanitizer follow-up if use-after-free is suspected (SC-004)
+- [x] T025 Verify SC-006 (p99 latency < 1 ms): review T017 output; if p99 exceeds the budget, record measured values in quickstart.md and open a follow-up issue rather than masking the regression (SC-006)
+- [x] T026 [P] Audit `src/time/MtcTickSource.h` and `src/time/MtcTickSource.cpp` for any remaining v1 references: grep for `onQuarterFrame`, `"200 Hz"`, `"before start()"`, `"must be called before start"` — each must be absent or updated. Also confirm the "One-instance constraint" docstring block is preserved in `MtcTickSource.h` (FR-009 carry-forward) (Principle VI, FR-009)
+- [x] T027 [P] Verify `git -C mtcreceiver rev-parse HEAD` still returns `59fc76e` after all changes (guard against accidental submodule drift during the feature branch)
 
 ---
 

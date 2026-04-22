@@ -11,7 +11,18 @@ namespace gme {
 namespace time {
 
 void MtcTickSource::setTickCallback(std::function<void(long)> cb) {
-    MtcReceiver::onQuarterFrame = std::move(cb);
+    if (cb) {
+        MtcReceiver::setTickCallback(
+            [cb = std::move(cb)](long ms, bool /*isCompleteFrame*/) {
+                cb(ms);
+            });
+    } else {
+        MtcReceiver::setTickCallback({});
+    }
+}
+
+MtcTickSource::~MtcTickSource() {
+    MtcReceiver::setTickCallback({});
 }
 
 MtcStartError MtcTickSource::start(const std::string& midiPort) {
