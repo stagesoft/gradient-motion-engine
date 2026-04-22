@@ -6,6 +6,8 @@ Auto-generated from all feature plans. Last updated: 2026-04-22
 - C++17 (GCC, `-Wall -O3 -pthread`) + None (C++ standard library only — `<cmath>`, `<vector>`, `<memory>`, `<string>`, `<functional>`) (002-gradient-curves)
 - C++17 (GCC, `-Wall -O3 -pthread`) + mtcreceiver v2.0.0 (submodule, pinned at `59fc76e`), (004-adapt-mtc-tick-v2)
 - N/A (in-memory adapter; no persistence) (004-adapt-mtc-tick-v2)
+- C++17 (GCC, `-Wall -O3 -pthread`) + NNG 1.10.1 (`libnng-dev`, C API — `nng_bus0_open`, (005-nng-bus-client)
+- N/A — all state is in-memory. The queue is a fixed-size array; (005-nng-bus-client)
 
 - C++17 (GCC, `-Wall -O3 -pthread`) (001-phase0-scaffold)
 
@@ -25,9 +27,9 @@ tests/
 C++17 (GCC, `-Wall -O3 -pthread`): Follow standard conventions
 
 ## Recent Changes
+- 005-nng-bus-client: Added C++17 (GCC, `-Wall -O3 -pthread`) + NNG 1.10.1 (`libnng-dev`, C API — `nng_bus0_open`,
 - 004-adapt-mtc-tick-v2: Added C++17 (GCC, `-Wall -O3 -pthread`) + mtcreceiver v2.0.0 (submodule, pinned at `59fc76e`),
 - 003-mtc-tick-source: Added C++17 (GCC, `-Wall -O3 -pthread`)
-- 002-gradient-curves: Added C++17 (GCC, `-Wall -O3 -pthread`) + None (C++ standard library only — `<cmath>`, `<vector>`, `<memory>`, `<string>`, `<functional>`)
 
 
 <!-- MANUAL ADDITIONS START -->
