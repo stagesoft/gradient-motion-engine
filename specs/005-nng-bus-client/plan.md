@@ -9,20 +9,21 @@ Phase 3 adds the NNG ingest pipeline and the library-side signal transport it
 feeds into: `FadeCommand` (library, `gme::signal`), `LockFreeQueue`
 (library, `gme::signal`), and `NngBusClient` (daemon, `daemon/comms/`). The
 daemon dials the CUEMS NNG bus as a `bus0` client, filters inbound messages to
-those addressed to `target == "fadeengine"` AND a matching `node_name`, parses
+those addressed to `target == "gradientengine"` AND a matching `node_name`, parses
 the four supported commands (`start_fade`, `cancel_fade`, `cancel_all`,
 `start_crossfade`) into a `FadeCommand` record, and hands them to the
 MTC-tick thread via a fixed-capacity SPSC ring buffer with drop-oldest
-overflow. The daemon also emits `fade_complete` and `fade_error` status
-messages back onto the bus using the same NodeOperation envelope. A 100 ms
-fallback drain thread handles queue consumption when MTC ticks are paused,
-and SIGTERM/SIGINT triggers a CANCEL_ALL-semantics shutdown that emits one
-`fade_error` per active fade and exits within 2 s.
+overflow. A 100 ms fallback drain thread handles queue consumption when MTC
+ticks are paused. The `NngBusClient::sendStatus` API is delivered and exercised
+for parse-error `fade_error` emission (the only in-Phase-3 caller).
 
-This phase does not start fades or evaluate curves — those are Phase 4. The
-contracts delivered here are the data structures (`FadeCommand`, the queue)
-and the producer (`NngBusClient`); the consumer in Phase 4 will own
-`FadeRegistry::apply(FadeCommand&)`.
+This phase does not start fades, evaluate curves, emit `fade_complete`, or
+install a SIGTERM handler — those land in Phase 4 (fade evaluation and
+`fade_complete`/OSC-failure `fade_error`) and Phase 5 (daemon signal handler
++ per-fade `fade_error` on shutdown). See `spec.md` §Scope Boundaries for
+the full list. The contracts delivered here are the data structures
+(`FadeCommand`, the queue) and the producer (`NngBusClient`); the consumer
+in Phase 4 will own `FadeRegistry::apply(FadeCommand&)`.
 
 ## Technical Context
 
@@ -46,13 +47,17 @@ library is portable C++17.
 (`gradient-motiond`) consumer. Phase 3 adds two library source files
 (`FadeCommand.{h,cpp}` is header-only; `LockFreeQueue.h` is a template) and
 one daemon subsystem (`daemon/comms/NngBusClient.{h,cpp}`).
-**Performance Goals**: SC-001 — NNG-to-queue latency ≤ 5 ms under normal
-load. SC-002 — NNG receive thread never blocks the MTC tick thread (tick
-latency drift ≤ ±1 ms whether NNG is idle or busy). SC-003 — under 100 cmd/s
-sustained load, drop rate ≤ 1/1000 (queue depth 64 is comfortable headroom).
-SC-004 — CANCEL_ALL is observable at the FadeRegistry within 200 ms while
-MTC is stopped. SC-007 — `fade_complete` emitted within 50 ms of end time.
-SC-008 — N `fade_error` on SIGTERM with N active fades, exit ≤ 2 s.
+**Performance Goals**: SC-001 — NNG-to-queue latency ≤ 5 ms under the SC-003
+load (in-phase; verified in `tests/test_nng_integration.cpp`). SC-002 — NNG
+receive thread never blocks the MTC tick thread (tick latency drift ≤ ±1 ms);
+design-enforced in Phase 3, measurement deferred to Phase 4 when the tick
+thread exists. SC-003 — under 100 cmd/s sustained load for ≥ 10 s, drop rate
+≤ 1/1000 (in-phase; integration test). SC-004 — CANCEL_ALL observable at the
+drain callback within 200 ms while MTC is stopped (in-phase; `test_lockfree_queue.cpp`).
+SC-006 — reconnect within 30 s (in-phase; integration test). SC-007
+(`fade_complete` within 50 ms) and SC-008 (N `fade_error` on SIGTERM, exit
+≤ 2 s) are deferred to Phase 4 and Phase 5 respectively per spec.md §Scope
+Boundaries.
 **Constraints**: **Real-Time Safety (Principle IV)** — the tick-thread
 consumer path (`LockFreeQueue::pop`) MUST be lock-free and
 allocation-free. The producer path (`push` from the NNG thread) is allowed

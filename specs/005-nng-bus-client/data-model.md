@@ -41,20 +41,19 @@ fields cause rejection per FR-014):
 
 | Command (`data.command`) | Required fields in `data` |
 |--------------------------|---------------------------|
-| `start_fade` | `fade_id`, `node_name`, `osc_host`, `osc_port`, `osc_address`, `start_value`, `end_value`, `duration_ms`, `curve_type`, `start_mtc_ms` |
+| `start_fade` | `fade_id`, `node_name`, `osc_host`, `osc_port`, `osc_path`, `start_value`, `end_value`, `duration_ms`, `curve_type`, `start_mtc_ms` |
 | `cancel_fade` | `fade_id`, `node_name` |
 | `cancel_all` | `node_name` |
-| `start_crossfade` | All `start_fade` fields PLUS `partner_fade_id`, `partner_osc_address`, `partner_start_value`, `partner_end_value` |
+| `start_crossfade` | All `start_fade` fields PLUS `partner_fade_id`, `partner_osc_path`, `partner_start_value`, `partner_end_value` |
 
 `curve_params` is optional in every command — when absent, stored as
 `nlohmann::json::object()` (empty JSON object).
 
-**JSON-to-struct mapping note**: The spec-level field name
-`osc_address` in the JSON maps to the struct field `osc_path` (the
-struct uses the liblo terminology — an OSC *path* like `/volmaster` —
-while the JSON keeps CUEMS's legacy `osc_address` key). The crossfade
-partner follows the same mapping (`partner_osc_address` JSON →
-`partner_osc_path` struct).
+**Wire/struct key parity**: the JSON key and the C++ struct field use
+the same name — `osc_path` (and `partner_osc_path` for crossfade). An
+earlier draft named the wire field `osc_address`; that rename is no
+longer in effect and the Python-side emitter (Phase 6) MUST emit
+`osc_path`.
 
 ### LockFreeQueue<T, N> (library, `gme::signal::LockFreeQueue`)
 
@@ -113,7 +112,7 @@ outbound status-send API. Holds a reference (not ownership) to a
 | `sock_` | `nng_socket` | Opened in `start()`, closed in `stop()`. |
 | `url_` | `std::string` | Controller URL, e.g. `tcp://127.0.0.1:9093`. |
 | `nodeName_` | `std::string` | Local node identity. Captured at construction. |
-| `senderId_` | `std::string` | `"fadeengine_" + nodeName_`. Precomputed for outbound envelopes. |
+| `senderId_` | `std::string` | `"gradientengine_" + nodeName_`. Precomputed for outbound envelopes. |
 | `queue_` | `LockFreeQueue<FadeCommand, 64>&` | Reference to owner's queue. |
 | `recvThread_` | `std::thread` | Background receive loop. Joined in `stop()`. |
 | `running_` | `std::atomic<bool>` | Set by `start()`, cleared by `stop()`. Read by the receive loop. |
@@ -165,7 +164,7 @@ Pure parse helper living in `FadeCommand.h`:
 ```cpp
 enum class ParseResult {
     Ok,                    // out is populated; caller should enqueue.
-    TargetMismatch,        // Drop silently (not for fadeengine).
+    TargetMismatch,        // Drop silently (not for gradientengine).
     NodeMismatch,          // Drop silently (not for this node).
     UnknownCommand,        // Log warning; no fade_id context for fade_error.
     MissingField,          // Log warning; if fade_id is parseable, emit fade_error.
@@ -183,6 +182,44 @@ field extraction, type checks, and required-field validation listed
 above. On `MissingField` / `TypeError` it sets `out.fade_id` if a
 parseable `fade_id` was present (so the caller can attribute a
 `fade_error`).
+
+## Free function: classifyParseOutcome
+
+The post-parse dispatch — deciding whether to enqueue, log, and/or emit
+`fade_error` for a given `ParseResult` — is extracted into a pure
+decision helper so that the behaviour is unit-testable without a
+real NNG socket. Living alongside `parseFadeCommand` in `FadeCommand.h`:
+
+```cpp
+enum class ParseOutcomeAction {
+    Enqueue,        // ParseResult::Ok → push to queue, no log.
+    DropSilent,     // TargetMismatch / NodeMismatch → no log, no status.
+    LogOnly,        // MalformedJson / UnknownCommand / MissingField|TypeError
+                    //   without parseable fade_id → GME_LOG_WARNING only.
+    LogAndStatus,   // MissingField / TypeError with parseable fade_id →
+                    //   GME_LOG_WARNING + sendStatus(FadeError, fade_id, "parse_error").
+};
+
+ParseOutcomeAction classifyParseOutcome(ParseResult result, bool hasFadeId);
+```
+
+Mapping (authoritative — tested in `test_nng_parse.cpp`):
+
+| ParseResult       | hasFadeId=false | hasFadeId=true |
+|-------------------|-----------------|----------------|
+| `Ok`              | `Enqueue`       | `Enqueue`      |
+| `TargetMismatch`  | `DropSilent`    | `DropSilent`   |
+| `NodeMismatch`    | `DropSilent`    | `DropSilent`   |
+| `UnknownCommand`  | `LogOnly`       | `LogOnly`      |
+| `MissingField`    | `LogOnly`       | `LogAndStatus` |
+| `TypeError`       | `LogOnly`       | `LogAndStatus` |
+| `MalformedJson`   | `LogOnly`       | `LogOnly`      |
+
+`NngBusClient::recvLoop` consumes this result directly: given the
+`ParseOutcomeAction`, it performs the enumerated side-effect(s) and nothing
+else. The dispatch is the only non-obvious logic in `recvLoop`, so pulling
+it out lets the 28-row decision table above be tested exhaustively with no
+socket, no thread, and no mocks.
 
 ## External entities referenced (not under this feature's control)
 

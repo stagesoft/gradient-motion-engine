@@ -142,7 +142,7 @@ ParseResult parseFadeCommand(const nlohmann::json& env,
 
     // 1. Target filter (highest-traffic short-circuit).
     auto t = env.find("target");
-    if (t == env.end() || !t->is_string() || t->get<std::string>() != "fadeengine")
+    if (t == env.end() || !t->is_string() || t->get<std::string>() != "gradientengine")
         return ParseResult::TargetMismatch;
 
     auto d = env.find("data");
@@ -190,7 +190,7 @@ using gme::signal::ParseResult;
 NngBusClient::NngBusClient(std::string nodeName,
                            gme::signal::LockFreeQueue<FadeCommand, 64>& queue)
     : nodeName_(std::move(nodeName))
-    , senderId_("fadeengine_" + nodeName_)
+    , senderId_("gradientengine_" + nodeName_)
     , queue_(queue) {}
 
 NngBusClient::~NngBusClient() { stop(); }
@@ -340,10 +340,10 @@ import json, pynng
 with pynng.Bus0(dial='tcp://127.0.0.1:9093') as s:
     s.send(json.dumps({
         'type':'command','action':'update',
-        'sender':'controller','target':'fadeengine',
+        'sender':'controller','target':'gradientengine',
         'data':{
             'command':'start_fade','fade_id':'smoke1','node_name':'nodeA',
-            'osc_host':'127.0.0.1','osc_port':9234,'osc_address':'/volmaster',
+            'osc_host':'127.0.0.1','osc_port':9234,'osc_path':'/volmaster',
             'start_value':0.0,'end_value':1.0,'duration_ms':3000,
             'curve_type':'linear','start_mtc_ms':-1}}).encode())
 "

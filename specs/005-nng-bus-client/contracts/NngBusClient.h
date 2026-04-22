@@ -25,10 +25,15 @@
  *    the referenced queue. That is the only place in this class that
  *    touches the queue.
  *  - `sendStatus()` is thread-safe — NNG's `nng_send` is safe on a
- *    single socket under NNG 1.10. Callers include the NNG recv
- *    thread (on parse error with a parseable fade_id), the MTC tick
- *    thread (Phase 4, on completion), and the shutdown handler
- *    (SIGTERM).
+ *    single socket under NNG 1.10. However, `nng_send` performs blocking
+ *    I/O. Real-time-sensitive callers (specifically the MTC tick thread,
+ *    Phase 4) MUST NOT invoke `sendStatus` directly — Principle IV
+ *    (Real-Time Safety) bans blocking I/O on the evaluation hot path.
+ *    Phase 4 will interpose an outbound-status worker thread + bounded
+ *    SPSC queue between the tick caller and `sendStatus` (see
+ *    research.md Decision 5). The Phase-3 callers (`NngBusClient::recvLoop`
+ *    on parse error; Phase-5 shutdown handler on SIGTERM) run outside
+ *    the real-time path and may call `sendStatus` directly.
  *  - `stop()` sets `running_ = false`, closes the socket (unblocking
  *    any in-flight `nng_recv`), and joins the thread.
  *
@@ -77,9 +82,12 @@ namespace comms {
 /**
  * @brief Status kinds emitted on the NNG bus.
  *
- * Used as the `target` field of outbound status envelopes:
- *  - `FadeComplete` → `target: "fade_complete"` (FR-006a).
- *  - `FadeError`    → `target: "fade_error"`    (FR-006b).
+ * Serialised into the outbound envelope's `data.event` field. The
+ * envelope's `target` is uniformly `"gradientengine"` regardless of the
+ * event kind — fade-specific discrimination lives inside `data`, not on
+ * the target:
+ *  - `FadeComplete` → `data.event: "fade_complete"` (FR-006a).
+ *  - `FadeError`    → `data.event: "fade_error"`    (FR-006b).
  */
 enum class StatusKind {
     FadeComplete,
@@ -108,7 +116,7 @@ public:
      * @param nodeName  The daemon's own node name. Used to filter
      *                  inbound `data.node_name` and to populate the
      *                  `sender` field of outbound status messages
-     *                  (`"fadeengine_" + nodeName`).
+     *                  (`"gradientengine_" + nodeName`).
      * @param queue     Reference to the owner's command queue. The
      *                  receive thread will push `FadeCommand`s here.
      *                  Must outlive the client.
@@ -168,13 +176,21 @@ public:
      * and performs a blocking `nng_send`. The socket buffer absorbs
      * the write; no outbound queue is maintained.
      *
+     * @warning Blocking I/O. MUST NOT be called from the MTC tick thread
+     *          (Principle IV: Real-Time Safety). Phase 4 callers on the
+     *          tick thread MUST route through the outbound-status
+     *          worker instead (see NngBusClient file header).
+     *
      * Envelope shape:
      * ```json
      * {"type":"status","action":"update",
-     *  "sender":"fadeengine_<node_name>",
-     *  "target":"fade_complete"|"fade_error",
-     *  "data":{"fade_id":"<id>","node_name":"<node>"[,"reason":"<text>"]}}
+     *  "sender":"gradientengine_<node_name>",
+     *  "target":"gradientengine",
+     *  "data":{"event":"fade_complete"|"fade_error",
+     *          "fade_id":"<id>","node_name":"<node>"[,"reason":"<text>"]}}
      * ```
+     * `target` is uniformly `"gradientengine"`; the fade-specific
+     * discriminator lives inside `data.event`.
      *
      * @param kind    `FadeComplete` or `FadeError`.
      * @param fadeId  Fade id to include in `data.fade_id`.
@@ -209,7 +225,7 @@ private:
     void recvLoop();
 
     std::string  nodeName_;
-    std::string  senderId_;   ///< "fadeengine_" + nodeName_.
+    std::string  senderId_;   ///< "gradientengine_" + nodeName_.
     gme::signal::LockFreeQueue<gme::signal::FadeCommand, 64>& queue_;
 
     nng_socket*  sock_{nullptr};  ///< Opaque pointer; real type is `nng_socket` (NNG C API).

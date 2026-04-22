@@ -19,26 +19,26 @@
  * malformed JSON cause the message to be rejected (ParseResult values
  * other than `Ok`).
  *
- * | Command          | Required in `data`                                                    |
- * |------------------|-----------------------------------------------------------------------|
- * | start_fade       | fade_id, node_name, osc_host, osc_port, osc_address, start_value,     |
- * |                  | end_value, duration_ms, curve_type, start_mtc_ms                      |
- * | cancel_fade      | fade_id, node_name                                                    |
- * | cancel_all       | node_name                                                             |
- * | start_crossfade  | start_fade fields + partner_fade_id, partner_osc_address,             |
- * |                  | partner_start_value, partner_end_value                                |
+ * | Command          | Required in `data`                                                 |
+ * |------------------|--------------------------------------------------------------------|
+ * | start_fade       | fade_id, node_name, osc_host, osc_port, osc_path, start_value,     |
+ * |                  | end_value, duration_ms, curve_type, start_mtc_ms                   |
+ * | cancel_fade      | fade_id, node_name                                                 |
+ * | cancel_all       | node_name                                                          |
+ * | start_crossfade  | start_fade fields + partner_fade_id, partner_osc_path,             |
+ * |                  | partner_start_value, partner_end_value                             |
  *
  * `curve_params` is optional. When absent, `FadeCommand::curve_params`
  * is stored as an empty JSON object (`nlohmann::json::object()`).
  * Unknown top-level keys in `data` and unknown keys inside
  * `curve_params` are silently ignored (FR-014, forward-compatibility).
  *
- * ## JSON-to-struct field name mapping
+ * ## Wire/struct key parity
  *
- * The wire JSON uses `osc_address` (CUEMS legacy); the struct uses
- * `osc_path` (liblo terminology — an OSC *path* like `/volmaster`).
- * The crossfade B-side mirrors the mapping
- * (`partner_osc_address` JSON → `partner_osc_path` struct).
+ * Wire JSON key names match the C++ struct field names verbatim —
+ * notably `osc_path` (OSC destination path, liblo terminology) and
+ * `partner_osc_path` for the crossfade B-side. The Python-side emitter
+ * (Phase 6) MUST use these same key names — no `osc_address` rename.
  *
  * @par Example usage:
  * @code
@@ -129,7 +129,7 @@ struct FadeCommand {
  */
 enum class ParseResult {
     Ok,                 ///< `out` is populated; caller should enqueue.
-    TargetMismatch,     ///< Drop silently (target != "fadeengine").
+    TargetMismatch,     ///< Drop silently (target != "gradientengine").
     NodeMismatch,       ///< Drop silently (data.node_name != own node).
     UnknownCommand,     ///< Log warning; `data.command` is not recognised.
     MissingField,       ///< Required field absent; log + optional fade_error.
@@ -143,8 +143,10 @@ enum class ParseResult {
  * Pure function — no I/O, no global state, safe to call from any
  * thread. Does all validation required by the spec:
  *
- *  1. Short-circuit on `envelope["target"] != "fadeengine"` →
- *     `TargetMismatch` (highest-traffic filter first).
+ *  1. Short-circuit on `envelope["target"] != "gradientengine"` →
+ *     `TargetMismatch` (highest-traffic filter first). `gradientengine`
+ *     is the uniform inbound target for this daemon; fade-specific
+ *     dispatch happens on `data.command`, not on `target`.
  *  2. Short-circuit on `envelope["data"]["node_name"] != ownNodeName` →
  *     `NodeMismatch`.
  *  3. Dispatch on `envelope["data"]["command"]`; populate `out` from
@@ -177,6 +179,70 @@ enum class ParseResult {
 ParseResult parseFadeCommand(const nlohmann::json& envelope,
                              const std::string& ownNodeName,
                              FadeCommand& out);
+
+/**
+ * @brief Action to take in response to a `ParseResult`.
+ *
+ * Separates the "what do we do next?" decision from the "what did
+ * parsing produce?" result, so the dispatch table can be unit-tested
+ * without a real socket or a live logger (see `classifyParseOutcome`).
+ *
+ * Authoritative mapping (FR-012, FR-014; tested in `test_nng_parse.cpp`):
+ *
+ * | ParseResult      | hasFadeId=false | hasFadeId=true   |
+ * |------------------|-----------------|------------------|
+ * | Ok               | Enqueue         | Enqueue          |
+ * | TargetMismatch   | DropSilent      | DropSilent       |
+ * | NodeMismatch     | DropSilent      | DropSilent       |
+ * | UnknownCommand   | LogOnly         | LogOnly          |
+ * | MissingField     | LogOnly         | LogAndStatus     |
+ * | TypeError        | LogOnly         | LogAndStatus     |
+ * | MalformedJson    | LogOnly         | LogOnly          |
+ */
+enum class ParseOutcomeAction {
+    Enqueue,        ///< Push the parsed `FadeCommand` into the queue.
+    DropSilent,     ///< Not for us; do not log, do not emit status.
+    LogOnly,        ///< Emit `GME_LOG_WARNING`; no `fade_error` (no fade_id context).
+    LogAndStatus    ///< Emit `GME_LOG_WARNING` AND `sendStatus(FadeError, fade_id, "parse_error")`.
+};
+
+/**
+ * @brief Classify a `ParseResult` into a concrete dispatch action.
+ *
+ * Pure function — no I/O, no logging, no state. Intended to be called
+ * by `NngBusClient::recvLoop` immediately after `parseFadeCommand`:
+ *
+ * @code
+ *   FadeCommand cmd;
+ *   ParseResult r = parseFadeCommand(env, nodeName_, cmd);
+ *   switch (classifyParseOutcome(r, !cmd.fade_id.empty())) {
+ *       case ParseOutcomeAction::Enqueue:
+ *           queue_.push(std::move(cmd));
+ *           break;
+ *       case ParseOutcomeAction::DropSilent:
+ *           break;
+ *       case ParseOutcomeAction::LogOnly:
+ *           GME_LOG_WARNING("parse rejected: " + describeParseResult(r));
+ *           break;
+ *       case ParseOutcomeAction::LogAndStatus:
+ *           GME_LOG_WARNING("parse rejected: " + describeParseResult(r));
+ *           sendStatus(StatusKind::FadeError, cmd.fade_id, "parse_error");
+ *           break;
+ *   }
+ * @endcode
+ *
+ * @param result     The outcome returned by `parseFadeCommand`.
+ * @param hasFadeId  `true` if `FadeCommand::fade_id` is non-empty
+ *                   (i.e. a parseable `fade_id` is available for
+ *                   status attribution). The caller computes this
+ *                   from the `out` parameter after parsing.
+ *
+ * @return The corresponding `ParseOutcomeAction`. Never throws.
+ *
+ * @throws None.
+ */
+ParseOutcomeAction classifyParseOutcome(ParseResult result,
+                                        bool hasFadeId) noexcept;
 
 } // namespace signal
 } // namespace gme

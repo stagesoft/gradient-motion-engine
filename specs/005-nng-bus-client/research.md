@@ -49,13 +49,17 @@ weighed.
   nullptr, /*allow_exceptions=*/false)`. If parsing fails, discard and log a
   `warning` (FR-012). Check two string fields **in this order** before any
   further work:
-  1. `target == "fadeengine"` — if not, drop silently (FR-003).
+  1. `target == "gradientengine"` — if not, drop silently (FR-003).
+     `gradientengine` is the uniform inbound target; no other target value
+     is meaningful to this daemon.
   2. `data.node_name == <daemon config node_name>` — if missing or
      mismatched, drop silently (FR-003a).
   Only after both checks pass does the client inspect `data.command` and
-  dispatch to the appropriate parser. Unknown `command` values emit a
-  warning but do not emit a `fade_error` (there is no `fade_id` context to
-  attribute the error to).
+  dispatch to the appropriate parser. Fade command names today are
+  `start_fade` / `cancel_fade` / `cancel_all` / `start_crossfade`; any
+  unknown `data.command` value (potentially a future non-fade message
+  routed to the same target) emits a warning but does not emit a
+  `fade_error` (there is no `fade_id` context to attribute the error to).
 - **Rationale**: Two-stage filter minimises work on broadcast messages
   destined for other subsystems (NodeEngine handles most traffic) and for
   other nodes (bus0 is broadcast — every node sees every message). Short-
@@ -65,8 +69,9 @@ weighed.
   `json::value_t::discarded` that the client inspects explicitly.
 - **Alternatives considered**:
   - **Filter on `node_name` first, target second** — rejected. Most
-    bus traffic is `target=nodeengine`, not `target=fadeengine`; filtering
-    on target first drops ~90 % of traffic before touching `data`.
+    bus traffic is `target=nodeengine`, not `target=gradientengine`;
+    filtering on target first drops ~90 % of traffic before touching
+    `data`.
   - **Use JSON Schema validation** — rejected. nlohmann-json-schema is
     not packaged for Debian/Ubuntu by default, and FR-014 already mandates
     forward-compat "ignore unknown fields" semantics, which hand-rolled
@@ -164,28 +169,47 @@ weighed.
   serialises the JSON on the calling thread, then calls `nng_send` with
   blocking semantics (status payload is small, socket buffering absorbs
   the write). Expected callers:
-  - Phase 4 `FadeRegistry::tick()` — on fade completion, calls
-    `sendStatus(kFadeComplete, fade.fadeId())`.
-  - Phase 4 `FadeRegistry` — on OSC send failure attributed to a live
-    fade, calls `sendStatus(kFadeError, fade.fadeId(), "osc_send_failed")`.
-  - `NngBusClient` itself — on parse failure with a parseable `fade_id`,
-    calls `sendStatus(kFadeError, parsed_id, "parse_error: " + what)`.
-  - Shutdown handler — on SIGTERM with N active fades, iterates and
-    calls `sendStatus(kFadeError, id, "daemon_shutdown")` for each.
+  - Phase 3 `NngBusClient::recvLoop` — on parse failure with a parseable
+    `fade_id`, calls `sendStatus(kFadeError, parsed_id, "parse_error")`
+    directly. The recv thread has no real-time budget; a blocking send
+    is acceptable here.
+  - **Phase 4 status-emit worker thread (NEW sub-component)** — on fade
+    completion or OSC send failure, `FadeRegistry::tick` (running on the
+    MTC tick thread) MUST NOT call `sendStatus` directly, since `nng_send`
+    is blocking I/O and the tick thread is Principle IV real-time hot
+    path. Instead, Phase 4 adds a second lightweight outbound-status
+    SPSC queue inside `NngBusClient` and a dedicated worker thread that
+    pops `(StatusKind, fade_id, reason)` tuples and calls `sendStatus`
+    out of band. The tick thread's contribution is a single `push` on
+    that outbound queue — wait-free and allocation-free (pre-sized
+    `std::string` buffers or a fixed-size char buffer for `reason`).
+  - Phase 5 shutdown handler — on SIGTERM with N active fades, iterates
+    and calls `sendStatus(kFadeError, id, "daemon_shutdown")` for each
+    directly from the shutdown thread. The tick thread is being torn
+    down by that point, so the shutdown thread owns the socket with no
+    competition and the blocking send is safe.
   JSON envelope:
   ```json
   {"type":"status","action":"update",
-   "sender":"fadeengine_<node_name>","target":"fade_complete",
-   "data":{"fade_id":"<id>","node_name":"<node>"}}
+   "sender":"gradientengine_<node_name>","target":"gradientengine",
+   "data":{"event":"fade_complete","fade_id":"<id>","node_name":"<node>"}}
   ```
-  `fade_error` adds `"reason": "<string>"` to `data`.
+  `fade_error` sets `"event":"fade_error"` and adds `"reason": "<string>"`
+  to `data`. `target` is uniformly `"gradientengine"` regardless of the
+  event kind; the fade-specific discriminator lives inside `data.event`
+  so future non-fade status types can coexist under the same target.
 - **Rationale**: Centralising status emission on the `NngBusClient` keeps
   the NNG/JSON knowledge in one place (Principle V). The method is
   callable from any thread because `nng_send` is thread-safe on a single
   NNG socket (documented in NNG 1.10 manual §`nng_send(3)`). Blocking
-  send is acceptable because the volume is bounded (order of cue
-  triggers, not tick rate) and serialising on the caller avoids an
-  additional outbound queue.
+  send is acceptable *for callers outside the real-time hot path* — the
+  recv thread and the shutdown thread both qualify. The MTC tick thread
+  does **not** qualify (Principle IV bans blocking I/O on the evaluation
+  hot path), which is why Phase 4 interposes a worker-thread queue
+  between the tick caller and the blocking `nng_send`. The outbound
+  queue is a low-volume, low-latency path (bounded at the rate of cue
+  completions, not tick rate), so a small fixed-capacity SPSC ring is
+  sufficient; it is *not* shared with the inbound command queue.
 - **Alternatives considered**:
   - **Outbound SPSC queue mirror of the inbound one** — rejected.
     Doubles the queue infrastructure for a low-volume path. Also

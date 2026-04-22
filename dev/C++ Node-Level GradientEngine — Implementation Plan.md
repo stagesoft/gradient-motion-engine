@@ -188,8 +188,8 @@ Uses **nng C library** (not pynng). Matches existing protocol:
 - Socket: `nng_bus0_open()` + `nng_dial()` with **non-blocking dial** (`NNG_FLAG_NONBLOCK`) and reconnect params (min 1s, max 30s) — matching pynng behavior in HubServices.py line 217
 - Connect to: `tcp://{controller_url}:{nng_port}` (default 9093)
 - Receive: background thread, `nng_recv()` loop, parse JSON with nlohmann/json
-- Filter: only process messages where `target == "fadeengine"` — check early before full JSON parse
-- Send: `nng_send()` for status (fade_complete, fade_error)
+- Filter: only process messages where `target == "gradientengine"` — check early before full JSON parse. `gradientengine` is the uniform inbound target for this daemon; the fade-specific kind is discriminated by `data.command` (`start_fade` / `cancel_fade` / `cancel_all` / `start_crossfade`). Future non-fade message types on the same target will add new `data.command` values, not new `target` values.
+- Send: `nng_send()` for status. Outbound envelopes use `target: "gradientengine"` uniformly; the status kind lives in `data.event` (`fade_complete` or `fade_error`).
 
 **FadeCommand struct** (in `gme::signal` namespace):
 ```cpp
@@ -220,11 +220,12 @@ struct FadeCommand {
 ```json
 {
   "type": "command", "action": "update",
-  "sender": "controller", "target": "fadeengine",
+  "sender": "controller", "target": "gradientengine",
   "data": {
     "command": "start_fade",
     "fade_id": "fade_abc123",
-    "osc_address": "/volmaster",
+    "node_name": "nodeA",
+    "osc_path": "/volmaster",
     "osc_port": 9234, "osc_host": "127.0.0.1",
     "start_value": 0.0, "end_value": 1.0,
     "duration_ms": 3000,
@@ -235,11 +236,24 @@ struct FadeCommand {
 }
 ```
 
+**Wire/struct key parity**: the JSON key is `osc_path` (and `partner_osc_path`
+for crossfade) — identical to the C++ struct field name. Earlier drafts used
+`osc_address` on the wire; that rename is no longer in effect, and the
+Python-side `ActionHandler` emitter (Phase 6) MUST use `osc_path`.
+
 **LockFreeQueue** (in `gme::signal` namespace): SPSC ring buffer (NNG thread → tick thread). Fixed capacity 64. **On overflow: drop oldest** (not block) — prevents NNG thread from stalling. Log a warning on drop.
 
 **Fallback drain when MTC stopped:** GradientEngine runs a low-frequency timer (every 100ms) that drains the command queue even when no MTC ticks are firing. This prevents command loss when MTC is stopped. The timer thread only drains commands (add/cancel fades), it does NOT evaluate curves or send OSC (no ticking without MTC). This ensures `CANCEL_ALL` on project unload is always processed.
 
-**Test:** `tests/test_nng_parse.cpp` — parse sample JSON, verify FadeCommand fields
+**Phase 3 scope boundary** (see `specs/005-nng-bus-client/spec.md` §Scope Boundaries for the authoritative list):
+
+- In-scope: NNG socket dial + recv + filter + parse + enqueue; `LockFreeQueue`; 100 ms fallback drain; `NngBusClient::sendStatus` API; parse-error `fade_error` emission.
+- Deferred to Phase 4: `fade_complete` emission at t ≥ 1.0 (needs `FadeRegistry::tick`); `fade_error` on OSC send failure (needs `OscSender`).
+- Deferred to Phase 5: SIGTERM graceful shutdown sequence (needs `FadeRegistry` enumeration + `GradientEngineApplication` signal handler); per-fade `fade_error` on daemon shutdown; 2 s exit budget.
+
+**Test:** `tests/test_nng_parse.cpp` — parse sample JSON, verify FadeCommand fields.
+`tests/test_lockfree_queue.cpp` — SPSC correctness, drop-oldest, TSan clean, 200 ms fallback-drain timing.
+`tests/test_nng_integration.cpp` — loopback NNG pair for NNG→queue latency, sustained-load drop rate, and reconnect-after-disconnect (SC-001, SC-003, SC-006).
 
 ---
 
@@ -271,7 +285,10 @@ struct ActiveFade {
 2. `value = start_value + (end_value - start_value) * curve->evaluate(t)`
 3. `int ret = lo_send(osc_target, osc_path, "f", value)` — check return, log on error, count consecutive failures
 4. `last_sent_value = value`
-5. If `t >= 1.0`: mark completed, queue NNG status message
+5. If `t >= 1.0`: mark completed, enqueue a status-emit request for the out-of-band status worker (see below) — implements spec FR-006a
+6. On repeated OSC send failure attributed to this fade: enqueue a `fade_error` status-emit request with `reason: "osc_send_failed"` — implements spec FR-006b (OSC branch)
+
+**Status-emit worker** (Phase 4 addition, driven by Principle IV — Real-Time Safety): `NngBusClient::sendStatus` performs a blocking `nng_send` and therefore MUST NOT be called directly from the MTC tick thread. Phase 4 introduces a lightweight outbound-status worker thread owned by `NngBusClient` with its own in-class bounded queue (fixed capacity, same SPSC-style overflow behaviour as the inbound queue — drop-oldest with warning). `FadeRegistry::tick` pushes `(StatusKind, fade_id, reason)` tuples onto this queue in the tick thread; the worker thread pops them and calls `sendStatus` out of band. This preserves the tick thread's real-time safety contract while keeping the `sendStatus` API the single serialisation point for NNG output. The parse-error caller (Phase 3 `NngBusClient::recvLoop`) continues to call `sendStatus` directly — the recv thread has no real-time budget.
 
 **FadeRegistry::cancelFade(fade_id, snap_to_end):**
 - If `snap_to_end == true`: send one final OSC with `end_value` (for stop/disarm scenarios)
@@ -301,10 +318,20 @@ struct ActiveFade {
 
 **Wire up** `GradientEngineApplication::initialize()` (in `daemon/`) → create MtcTickSource, NngBusClient, FadeRegistry, GradientEngine. `run()` → start threads, block on signal. `shutdown()` → cancel all, close NNG, close MIDI.
 
+**Graceful shutdown sequence** (spec FR-013, SC-008): the SIGTERM/SIGINT handler installed by `GradientEngineApplication` MUST:
+
+1. Stop accepting new commands from the NNG receive thread (set a shutdown flag consulted in `recvLoop`; do not call `NngBusClient::stop()` yet).
+2. Enumerate active fades via `FadeRegistry`; for each, call `NngBusClient::sendStatus(FadeError, fade_id, "daemon_shutdown")` directly from the shutdown thread (not via the tick-thread status worker — the tick thread is being torn down).
+3. Halt fade evaluation without sending any final OSC values — parameters remain at `last_sent_value`.
+4. Call `NngBusClient::stop()` to close the socket and join the receive thread.
+5. Exit within 2 s of signal receipt (overall budget).
+
+The `sendStatus` calls in step 2 are safe from the shutdown thread because `nng_send` is thread-safe on a single NNG socket (see `specs/005-nng-bus-client/research.md` Decision 5) and the tick thread is not competing for it at that point.
+
 **systemd:** `gradient-motiond.service`
 ```ini
 [Unit]
-Description=CUEMS Fade Engine (MTC-synced fade processor)
+Description=CUEMS Gradient Motion Engine (MTC-synced movement processor)
 PartOf=cuems-node.target
 After=cuems-node-engine.service jackd-cuems.service
 
@@ -341,16 +368,16 @@ Also add to cuems-common service collection.
 
 **Modify** XSD schemas:
 - `script.xsd`: add optional `fade_time` (float), `fade_curve` (string), `fade_curve_params` (string) to ActionCueType. Existing saved projects without these fields will load with None values (backward compatible).
-- `settings.xsd`: add `FadeEngineType` and `<fadeengine>` element to `NodeConfType` (see Phase 0)
+- `settings.xsd`: add `GradientEngineType` and `<gradientengine>` element to `NodeConfType` (see Phase 0)
 
 ### 6b: cuems-engine (DEPLOY ORDER: NodeEngine filter FIRST)
 
 **Modify** [NodeCommunications.py](../cuems-engine/src/cuemsengine/comms/NodeCommunications.py) — **PREREQUISITE, deploy before gradient-motiond**:
-- In `_handle_command_operation` (line 60): add early return `if operation.target == "fadeengine": return` at line 73, before `command_name = operation.target`. This is the correct layer — the full `NodeOperation` with the `target` field is available here, unlike in `NodeEngine._handle_nng_command` which only receives `(command_name, value, address)`.
-- Also add `OperationType.STATUS` handler to `set_receive_callbacks` (line 35-37) for receiving fade_complete messages from gradient-motiond.
+- In `_handle_command_operation` (line 60): add early return `if operation.target == "gradientengine": return` at line 73, before `command_name = operation.target`. This is the correct layer — the full `NodeOperation` with the `target` field is available here, unlike in `NodeEngine._handle_nng_command` which only receives `(command_name, value, address)`. The filter is on the uniform target `"gradientengine"` regardless of which fade sub-command the message carries inside `data`.
+- Also add `OperationType.STATUS` handler to `set_receive_callbacks` (line 35-37) for receiving `data.event: "fade_complete"` status messages from gradient-motiond (envelope target is `"gradientengine"`; the handler inspects `data.event`).
 
 **Modify** [ControllerEngine.py](../cuems-engine/src/cuemsengine/ControllerEngine.py):
-- In STATUS handler: ignore/skip status messages from gradient-motiond (`sender.startswith("fadeengine_")`) to prevent confusion in multi-node setups where Bus0 broadcasts to all peers
+- In STATUS handler: ignore/skip status messages from gradient-motiond (`sender.startswith("gradientengine_")`) to prevent confusion in multi-node setups where Bus0 broadcasts to all peers
 
 **Modify** [ActionHandler.py](../cuems-engine/src/cuemsengine/cues/ActionHandler.py) `_handle_fade_in` (line 402):
 1. Arm target (existing)
@@ -359,7 +386,7 @@ Also add to cuems-common service collection.
 4. Resolve target's OSC endpoint (after arm, before go returns):
    - **AudioCue** → AudioPlayer's OSC port + `/volmaster`. Port is at `target._osc.remote_port` (set during arm by `PlayerHandler.new_audio_output()` → `PlayerClient(remote_port=port)`).
    - **VideoCue** → port 7000 + `/videocomposer/layer/{layer_id}/opacity`. Layer ID in `target._layer_ids` after arm.
-5. Send NNG `NodeOperation(COMMAND, UPDATE, target="fadeengine", data={start_fade...})` via `CUE_HANDLER.communications_thread`
+5. Send NNG `NodeOperation(COMMAND, UPDATE, target="gradientengine", data={command: "start_fade", ...})` via `CUE_HANDLER.communications_thread` — the fade sub-kind lives in `data.command`, not on the envelope's `target`
 6. **Unit conversion:** `start_value=0.0, end_value=float(target.master_vol) / 100.0` (UI uses 0-100%, OSC expects 0.0-1.0 — see run_cue.py line 140)
 
 **Volume conflict with run_cue:** `run_audioCue` (run_cue.py line 134-150) sets `/volmaster` once at cue start. Use a **side-channel on the cue object** to override:
@@ -372,7 +399,7 @@ Also add to cuems-common service collection.
 1. Resolve start_value: `float(target.master_vol) / 100.0` — the cue's configured volume as 0.0-1.0 gain. This matches what `run_audioCue` initially set. (If a previous fade changed the volume, track the last-known value on the cue: `getattr(target, '_current_volume', float(target.master_vol) / 100.0)`)
 2. Resolve port: same as fade_in — `target._osc.remote_port`
 3. Send NNG start_fade with `start_value=current_vol, end_value=0.0`
-4. On `fade_complete` NNG status from gradient-motiond → trigger disarm. **Implementation:** Add `OperationType.STATUS` to `NodeCommunications.set_receive_callbacks()` (currently only registers COMMAND — line 35-37). The new STATUS handler checks `operation.target == "fade_complete"` and calls `CUE_HANDLER.disarm(cue_by_fade_id)`. The fade_id in the status message maps back to the target cue.
+4. On `fade_complete` NNG status from gradient-motiond → trigger disarm. **Implementation:** Add `OperationType.STATUS` to `NodeCommunications.set_receive_callbacks()` (currently only registers COMMAND — line 35-37). The new STATUS handler checks `operation.target == "gradientengine"` AND `operation.data.get("event") == "fade_complete"` (the envelope target is always `"gradientengine"`; the fade-specific discriminator is `data.event`), then calls `CUE_HANDLER.disarm(cue_by_fade_id)`. The `fade_id` carried in `data.fade_id` maps back to the target cue.
 
 **Modify** [CueHandler.py](../cuems-engine/src/cuemsengine/cues/CueHandler.py) pre-arm path (~line 267):
 - Add `fade_in` to the pre-arm condition alongside `play`. Currently only `action_type == 'play'` triggers pre-arm of the ActionCue's target at script load. Since `fade_in` also starts playback (from silence), the target should be pre-armed to avoid arm-at-go-time delay:
@@ -386,7 +413,7 @@ Also add to cuems-common service collection.
 - In `ControllerEngine.load_project()` and `ControllerEngine.stop_script()`: send `CANCEL_ALL` to gradient-motiond via NNG before killing players. This prevents stale fades from sending OSC to dead player ports.
 
 **Modify** [NodesHub.py](../cuems-engine/src/cuemsengine/comms/NodesHub.py):
-- No new OperationType needed — reuse `COMMAND` with `target="fadeengine"`. GradientEngine filters on target field.
+- No new OperationType needed — reuse `COMMAND` with `target="gradientengine"` (uniform for all inbound messages destined to gradient-motiond). The fade-specific sub-kind is inside `data.command`; GradientEngine filters on the target field first, then dispatches on `data.command`.
 
 ---
 
