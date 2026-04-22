@@ -83,7 +83,7 @@ A developer running the test suite needs all MtcTickSource unit tests (Scenarios
 - What happens when `setTickCallback` is called with an empty function object? The system must deregister any existing callback without crashing.
 - What happens when MtcTickSource is destroyed while a tick is being processed? Destruction must block until the in-flight callback returns before releasing resources.
 - What happens when ghost ticks arrive during an invalid QF sequence? With v2.0.0 these are suppressed upstream; the consumer must not receive or need to filter them.
-- What happens when the first QFs arrive in reverse direction? v2.0.0 suppresses callbacks until direction stabilises; the consumer should expect 6 callbacks in a complete backwards stream rather than 8.
+- What happens when the first QFs arrive in reverse direction? v2.0.0 suppresses callbacks until direction stabilises; the consumer should expect 6 callbacks in a complete backwards stream rather than 8. **Scope note**: this behaviour is verified by mtcreceiver's own upstream unit tests — gradient-motion-engine does not re-verify it and exposes no code path that branches on direction, so no task in this feature covers it.
 
 ## Requirements *(mandatory)*
 
@@ -94,9 +94,11 @@ A developer running the test suite needs all MtcTickSource unit tests (Scenarios
 - **FR-003**: `MtcTickSource::setTickCallback` called with an empty/null function MUST deregister the callback via `MtcReceiver::setTickCallback({})`.
 - **FR-004**: `MtcTickSource` MUST declare an explicit destructor (not `= default`) that calls `MtcReceiver::setTickCallback({})` to guarantee no-call-after-unregister.
 - **FR-005**: All unit tests in `tests/test_mtc_tick_source.cpp` MUST be rewritten to use `MtcReceiver::invokeTickForTesting(long ms, bool isCompleteFrame)` and the `SkipPortOpenTag` constructor available under the testing compile flag, replacing all direct references to the removed `MtcReceiver::onQuarterFrame`. Scenario B MUST be repurposed to verify the v2.0.0 single-fire-per-QF contract: each `invokeTickForTesting` call produces exactly one callback invocation, and the `isCompleteFrame` flag is correctly forwarded/ignored by the adapter.
-- **FR-006**: The synthetic-stream test MUST reflect 1200 ticks over 12 s at the real QF rate of 25 fps (100 Hz); any spec comment or assertion previously referencing 60 s must be corrected.
+- **FR-006**: The synthetic-stream test MUST reflect 1200 ticks over 12 s at the real QF rate of 25 fps (100 Hz); any in-code comment or assertion inside `tests/test_mtc_tick_source.cpp` previously referencing 60 s must be corrected. **Scope**: "any comment or assertion" refers to in-code artifacts in this repository only — prior spec documents (e.g. spec 003) are historical and not subject to retroactive correction under this feature.
 - **FR-007**: The build system MUST enable the mtcreceiver testing helpers when compiling the test target.
 - **FR-008**: Rewritten Scenarios A, C, and the synthetic-stream test MUST drive `invokeTickForTesting` with a realistic MTC pattern — 7 calls with `isCompleteFrame=false` followed by 1 call with `isCompleteFrame=true` per MTC full-frame cycle (every 8 QFs) — to mirror real quarter-frame traffic.
+- **FR-009**: The one-instance-per-process constraint carried forward from spec 003 (single `MtcTickSource` per process; mtcreceiver uses process-global static state) MUST be preserved. Constructing a second `MtcTickSource` while one already exists remains undefined behaviour and this feature does not introduce multi-instance support.
+- **FR-010**: A regression test MUST verify that `MtcTickSource::setTickCallback()` is safe to call concurrently from multiple threads (US2 Acceptance Scenario 3): spawning a thread that repeatedly registers/deregisters callbacks while the main thread fires ticks must not crash, must not produce data races, and must leave at most one callback active at any moment.
 
 ### Key Entities
 
@@ -108,11 +110,11 @@ A developer running the test suite needs all MtcTickSource unit tests (Scenarios
 ### Measurable Outcomes
 
 - **SC-001**: A clean build of gradient-motion-engine (library + daemon + tests) completes with zero errors and zero warnings related to mtcreceiver API usage after the submodule bump.
-- **SC-002**: All MtcTickSource unit tests pass (Scenarios A, B, C, synthetic stream) with a test run completing in under 30 seconds.
+- **SC-002**: All `test_mtc_tick_source` scenarios (A, B, C, D, E, F, synthetic stream) pass, with the `test_mtc_tick_source` binary alone completing in under 30 seconds wall-clock time on reference hardware. (Scope is restricted to this test target, not the full `ctest` suite.)
 - **SC-003**: The synthetic-stream test delivers exactly 1200 callbacks and reports a final MTC head that differs from the expected value by no more than 1 ms, covering 12 s of simulated playback at 25 fps.
 - **SC-004**: Destroying a MtcTickSource during an active tick stream produces zero callback invocations after the destructor returns, with no crashes or memory-safety errors under a sanitiser build.
 - **SC-005**: The project builds and all tests pass under a thread-safety checker with zero data-race reports in MtcTickSource and MtcReceiver code paths.
-- **SC-006**: p99 callback dispatch latency — measured from mtcreceiver tick entry point to consumer callback return — MUST be under 1 ms on the target hardware under nominal playback load.
+- **SC-006**: p99 callback dispatch latency — measured from `invokeTickForTesting` entry to consumer callback return, sampled across the full 1200-tick synthetic-stream test (SC-003) — MUST be under 1 ms on reference hardware. "Nominal playback load" is defined here as the synthetic stream cadence: 100 Hz sustained for 12 s with the 7×`false` + 1×`true` flag pattern.
 
 ## Assumptions
 
