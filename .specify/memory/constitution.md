@@ -1,23 +1,20 @@
 <!--
 Sync Impact Report
 ==================
-Version change: N/A (template) -> 1.0.0 (initial ratification)
+Version change: 1.0.0 -> 1.1.0 (MINOR: new principle + clarifications)
 
-Modified principles: N/A (all new)
-  - I. Deterministic Evaluation (NEW)
-  - II. Modular Architecture (NEW)
-  - III. Library-First (NEW)
-  - IV. Real-Time Safety (NEW)
-  - V. Protocol-Agnostic Core (NEW)
-  - VI. Documentation Standards (NEW)
+Modified principles:
+  - II. Modular Architecture — clarified gme::motion responsibility
+    (motion lifecycle + polymorphic motion types, including scalar
+    fades and future N-dimensional vector motions).
 
-Added sections:
-  - Core Principles (6 principles)
-  - Performance & Safety Standards
-  - Development Workflow
-  - Governance
+Added principles:
+  - VII. Extensibility via Abstraction (NEW) — codifies open-closed
+    extension for motion types, curves, and transports.
 
-Removed sections: None
+Added sections: None (expanded Performance & Safety Standards with
+  a Virtual Dispatch bullet; expanded Principle II with a module
+  responsibility bullet).
 
 Templates requiring updates:
   - .specify/templates/plan-template.md — Constitution Check section
@@ -66,9 +63,26 @@ compilable and testable.
   interfaces, not shared mutable state.
 - Adding or removing a module MUST NOT require changes to
   unrelated modules.
+- **Module responsibilities**:
+  - `gme::time` — MTC clock sources and tick scheduling.
+  - `gme::gradient` — curve types, curve factory, curve
+    evaluation.
+  - `gme::motion` — motion lifecycle (`MotionRegistry`,
+    `MotionFactory`) and the polymorphic motion hierarchy
+    (`IMotion` and its concrete subclasses: scalar
+    `FadeMotion`, N-dimensional `VectorMotion<N>`, future
+    crossfade / path motions).
+  - `gme::signal` — transport-agnostic command, frame, and
+    status record types plus their lock-free queues.
+  - `gme::osc` — OSC transport layer (address handles,
+    send functions).
+  - `gme::engine` — orchestrator (`GradientEngine`) that
+    wires the other modules together into a running pipeline.
 
 *Rationale*: Clean separation enables independent evolution of
-each subsystem and reduces the blast radius of changes.
+each subsystem and reduces the blast radius of changes. Calling
+out the per-module responsibility prevents motion-specific code
+from silently migrating into `gme::engine` or `gme::signal`.
 
 ### III. Library-First
 
@@ -155,6 +169,47 @@ third-party applications. Consumers who cannot read the source
 depend entirely on generated documentation to understand
 contracts, error modes, and correct usage.
 
+### VII. Extensibility via Abstraction
+
+Adding a new motion type, curve type, or output payload shape
+MUST NOT require modifications to the motion registry, command
+dispatcher, or tick loop.
+
+- New motion types MUST extend `gme::motion::IMotion`. The
+  registry, factory, and tick loop interact with motions
+  exclusively through this interface.
+- New curve types MUST register with
+  `gme::gradient::CurveFactory`; no consumer code changes.
+- New output transports MUST implement the transport-agnostic
+  send interface (see Principle V); no evaluation-logic
+  changes.
+- Abstract interfaces expose the subset of state that ALL
+  subclasses share (common lifecycle fields — `motion_id`,
+  `osc_key`, `start_mtc_ms`, `duration_ms`, `completed`,
+  `consecutive_osc_failures`). Per-type data (curves, payload
+  arrays, transport handles) MUST live in the derived type,
+  never in the base.
+- Scalar and N-dimensional motion payloads share a single
+  `IMotion` contract. Payload arity is a compile-time template
+  parameter of the concrete motion type (e.g.
+  `VectorMotion<N>` with `N ∈ {2, 3, 4}` using
+  `std::array<float, N>`), not a runtime branch in the
+  registry.
+- The supersede rule is global: one motion per output path at
+  any given time, keyed by the composite `"host:port:path"`.
+  Multi-path outputs are represented by multiple simultaneous
+  motions; multi-dimensional payloads are represented by a
+  single motion whose transport message carries N arguments.
+
+*Rationale*: The engine's identity is a deterministic,
+embeddable core with stable lifecycle semantics. New motion
+shapes (scalar fades today; N-dimensional vector motions,
+crossfades, and other payloads in the future), new curves, and
+new transports will accrete over time. Open-closed extensibility
+bounds the risk of regressions in load-bearing infrastructure
+and keeps per-type variation isolated from shared lifecycle
+code.
+
 ## Performance & Safety Standards
 
 - **Allocation budget**: Zero heap allocations per evaluation
@@ -172,6 +227,13 @@ contracts, error modes, and correct usage.
 - **Build reproducibility**: Builds MUST be reproducible given
   the same toolchain and source revision. Compiler flags and
   dependency versions MUST be pinned.
+- **Virtual dispatch**: Acceptable at per-motion granularity
+  in the tick loop (one virtual call per active motion per
+  tick, bounded by the motion count). NOT acceptable at
+  per-sample or per-curve-evaluation granularity; curve
+  evaluation is inlined via `gme::gradient::Curve::evaluate`.
+  Virtual calls MUST NOT introduce heap allocation, blocking
+  I/O, or exception escape.
 
 ## Development Workflow
 
@@ -214,4 +276,4 @@ against these principles. Violations MUST be resolved before
 merge or explicitly justified in the Complexity Tracking
 section of the implementation plan.
 
-**Version**: 1.0.0 | **Ratified**: 2026-04-10 | **Last Amended**: 2026-04-10
+**Version**: 1.1.0 | **Ratified**: 2026-04-10 | **Last Amended**: 2026-04-23
