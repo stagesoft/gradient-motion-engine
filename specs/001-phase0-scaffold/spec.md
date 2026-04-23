@@ -3,7 +3,7 @@
 **Feature Branch**: `001-phase0-scaffold`
 **Created**: 2026-04-10
 **Status**: Draft
-**Input**: User description: "Based on the initial plan developed in dev/C++ Node-Level FadeEngine — Implementation Plan.md, adapt the structure laid out to implement Phase 0 into this repository. Ask for any missing libraries or required files so it can be added or referenced."
+**Input**: User description: "Based on the initial plan developed in dev/C++ Node-Level GradientEngine — Implementation Plan.md, adapt the structure laid out to implement Phase 0 into this repository. Ask for any missing libraries or required files so it can be added or referenced."
 
 ## User Scenarios & Testing *(mandatory)*
 

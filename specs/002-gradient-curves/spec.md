@@ -3,7 +3,7 @@
 **Feature Branch**: `002-gradient-curves`  
 **Created**: 2026-04-15  
 **Status**: Draft  
-**Input**: User description: "Develop the requirements for Phase 1, based on the description layed out at dev/C++ Node-Level FadeEngine — Implementation Plan.md"
+**Input**: User description: "Develop the requirements for Phase 1, based on the description layed out at dev/C++ Node-Level GradientEngine — Implementation Plan.md"
 
 ## Clarifications
 

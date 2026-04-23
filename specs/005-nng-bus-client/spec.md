@@ -3,7 +3,7 @@
 **Feature Branch**: `005-nng-bus-client`  
 **Created**: 2026-04-22  
 **Status**: Draft  
-**Input**: User description: "start Phase 3 development as layed out in dev/C++ Node-Level FadeEngine — Implementation Plan.md"
+**Input**: User description: "start Phase 3 development as layed out in dev/C++ Node-Level GradientEngine — Implementation Plan.md"
 
 ## Clarifications
 
@@ -83,7 +83,7 @@ When MTC transport is stopped (no tick callbacks firing), fade commands — espe
 Several requirements in this spec describe behaviour that is observable only
 once fade evaluation, OSC send, and daemon-lifecycle wiring exist. Those
 components are delivered in later phases (see the master implementation plan,
-`dev/C++ Node-Level FadeEngine — Implementation Plan.md`). This spec records
+`dev/C++ Node-Level GradientEngine — Implementation Plan.md`). This spec records
 the complete requirement so the Phase 3 design is forward-compatible, but
 the requirement is marked **[Phase 4]** or **[Phase 5]** where implementation
 and verification must defer.
