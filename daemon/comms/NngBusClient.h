@@ -85,7 +85,7 @@ namespace comms {
  * @brief Daemon-side alias for `gme::signal::StatusKind`.
  *
  * `StatusKind` is defined in `src/signal/StatusEmitRequest.h` so that
- * `libgradient_motion` (specifically `FadeRegistry`) can produce status
+ * `libgradient_motion` (specifically `MotionRegistry`) can produce status
  * tuples without depending on any daemon header. This alias keeps all
  * existing `NngBusClient` call sites compiling unchanged.
  */
@@ -151,9 +151,9 @@ public:
      *
      * Thread-safe. Blocking I/O — MUST NOT be called from the MTC tick thread.
      *
-     * @param kind    `FadeComplete` or `FadeError`.
-     * @param fadeId  Fade id included in `data.fade_id`.
-     * @param reason  Reason string (only used for FadeError; omitted when empty).
+     * @param kind    `MotionComplete` or `MotionError`.
+     * @param fadeId  Motion id included in `data.fade_id`.
+     * @param reason  Reason string (only used for MotionError; omitted when empty).
      *
      * @throws None.
      */
@@ -188,7 +188,7 @@ public:
      *
      * @par Example:
      * @code
-     *   client.pushStatus({ gme::signal::StatusKind::FadeComplete, fade_id, "" });
+     *   client.pushStatus({ gme::signal::StatusKind::MotionComplete, motion_id, "" });
      * @endcode
      */
     void pushStatus(gme::signal::StatusEmitRequest&& req);

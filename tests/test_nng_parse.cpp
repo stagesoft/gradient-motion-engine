@@ -137,22 +137,43 @@ static bool test_parse_unknown_command() {
     return true;
 }
 
-static bool test_parse_cancel_fade() {
+static bool test_parse_cancel_motion() {
+    // New wire command "cancel_motion" with "motion_id" key
     nlohmann::json env = {
         {"type",   "command"},
         {"action", "apply"},
         {"target", "gradientengine"},
         {"data", {
-            {"command",   "cancel_fade"},
+            {"command",   "cancel_motion"},
             {"node_name", "node1"},
-            {"fade_id",   "fade_002"}
+            {"motion_id", "fade_002"}
         }}
     };
     FadeCommand cmd;
     auto r = parseFadeCommand(env, "node1", cmd);
-    CHECK(r == ParseResult::Ok, "cancel_fade result");
-    CHECK(cmd.type == FadeCommand::Type::CANCEL_FADE, "cancel_fade type");
-    CHECK(cmd.fade_id == "fade_002", "cancel_fade fade_id");
+    CHECK(r == ParseResult::Ok, "cancel_motion result");
+    CHECK(cmd.type == FadeCommand::Type::CANCEL_MOTION, "cancel_motion type");
+    CHECK(cmd.fade_id == "fade_002", "cancel_motion motion_id alias");
+    return true;
+}
+
+static bool test_parse_cancel_motion_fade_id_alias() {
+    // Legacy alias: "cancel_motion" with "fade_id" fallback key
+    nlohmann::json env = {
+        {"type",   "command"},
+        {"action", "apply"},
+        {"target", "gradientengine"},
+        {"data", {
+            {"command",   "cancel_motion"},
+            {"node_name", "node1"},
+            {"fade_id",   "fade_003"}
+        }}
+    };
+    FadeCommand cmd;
+    auto r = parseFadeCommand(env, "node1", cmd);
+    CHECK(r == ParseResult::Ok, "cancel_motion fade_id alias result");
+    CHECK(cmd.type == FadeCommand::Type::CANCEL_MOTION, "cancel_motion fade_id alias type");
+    CHECK(cmd.fade_id == "fade_003", "cancel_motion fade_id alias value");
     return true;
 }
 
@@ -324,7 +345,8 @@ int main() {
         { "parse_missing_field",             test_parse_missing_field             },
         { "parse_type_error",                test_parse_type_error                },
         { "parse_unknown_command",           test_parse_unknown_command           },
-        { "parse_cancel_fade",               test_parse_cancel_fade               },
+        { "parse_cancel_motion",             test_parse_cancel_motion             },
+        { "parse_cancel_motion_fade_id_alias", test_parse_cancel_motion_fade_id_alias },
         { "parse_cancel_all",                test_parse_cancel_all                },
         { "parse_start_crossfade_roundtrip", test_parse_start_crossfade_roundtrip },
         { "parse_forward_compat",            test_parse_forward_compat            },

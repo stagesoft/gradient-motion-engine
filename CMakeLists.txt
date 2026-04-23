@@ -22,6 +22,14 @@ option(BUILD_DAEMON "Build the gradient-motiond daemon (requires rtmidi)" ON)
 # ===========================================================
 find_package(PkgConfig REQUIRED)
 
+# On Debian/Ubuntu the multiarch pkgconfig directory is not always in the
+# default PKG_CONFIG_PATH. Append it when CMake reports a library architecture
+# (e.g. x86_64-linux-gnu, aarch64-linux-gnu). No-op on macOS / non-multiarch.
+if(CMAKE_LIBRARY_ARCHITECTURE)
+    set(ENV{PKG_CONFIG_PATH}
+        "/usr/lib/${CMAKE_LIBRARY_ARCHITECTURE}/pkgconfig:$ENV{PKG_CONFIG_PATH}")
+endif()
+
 if(BUILD_DAEMON)
     # Required for daemon: RtMidi (needed by mtcreceiver)
     pkg_check_modules(RTMIDI REQUIRED rtmidi)

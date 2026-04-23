@@ -85,16 +85,16 @@ if(BUILD_DAEMON)
     set_tests_properties(test_nng_integration PROPERTIES LABELS "integration")
 endif()
 
-# ── FadeRegistry unit tests (Phase 4) ────────────────────────────────────────
+# ── FadeMotion behavioural regression tests (ported from test_fade_registry) ──
 if(BUILD_DAEMON AND LIBLO_FOUND)
-    add_executable(test_fade_registry test_fade_registry.cpp)
+    add_executable(test_fade_motion test_fade_motion.cpp)
 
-    target_include_directories(test_fade_registry PRIVATE
+    target_include_directories(test_fade_motion PRIVATE
         ${CMAKE_SOURCE_DIR}/src
         ${CMAKE_SOURCE_DIR}
     )
 
-    target_link_libraries(test_fade_registry PRIVATE
+    target_link_libraries(test_fade_motion PRIVATE
         gradient_motion
         mtcreceiver
         ${RTMIDI_LIBRARIES}
@@ -102,20 +102,41 @@ if(BUILD_DAEMON AND LIBLO_FOUND)
         pthread
     )
 
-    target_compile_definitions(test_fade_registry PRIVATE MTCRECV_TESTING)
+    target_compile_definitions(test_fade_motion PRIVATE MTCRECV_TESTING)
 
-    add_test(NAME test_fade_registry COMMAND test_fade_registry)
-    set_tests_properties(test_fade_registry PROPERTIES LABELS "unit")
+    add_test(NAME test_fade_motion COMMAND test_fade_motion)
+    set_tests_properties(test_fade_motion PROPERTIES LABELS "unit")
+
+    # ── MotionRegistry lifecycle tests (TestMotion double, no OSC) ───────────
+    add_executable(test_motion_registry test_motion_registry.cpp)
+
+    target_include_directories(test_motion_registry PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}
+    )
+
+    target_link_libraries(test_motion_registry PRIVATE
+        gradient_motion
+        mtcreceiver
+        ${RTMIDI_LIBRARIES}
+        ${LIBLO_LIBRARIES}
+        pthread
+    )
+
+    target_compile_definitions(test_motion_registry PRIVATE MTCRECV_TESTING)
+
+    add_test(NAME test_motion_registry COMMAND test_motion_registry)
+    set_tests_properties(test_motion_registry PROPERTIES LABELS "unit")
 
     # ── OSC loopback benchmark (SC-007) ──────────────────────────────────────
-    add_executable(test_fade_registry_bench test_fade_registry_bench.cpp)
+    add_executable(test_motion_registry_bench test_motion_registry_bench.cpp)
 
-    target_include_directories(test_fade_registry_bench PRIVATE
+    target_include_directories(test_motion_registry_bench PRIVATE
         ${CMAKE_SOURCE_DIR}/src
         ${CMAKE_SOURCE_DIR}
     )
 
-    target_link_libraries(test_fade_registry_bench PRIVATE
+    target_link_libraries(test_motion_registry_bench PRIVATE
         gradient_motion
         mtcreceiver
         ${RTMIDI_LIBRARIES}
@@ -123,8 +144,8 @@ if(BUILD_DAEMON AND LIBLO_FOUND)
         pthread
     )
 
-    target_compile_definitions(test_fade_registry_bench PRIVATE MTCRECV_TESTING)
+    target_compile_definitions(test_motion_registry_bench PRIVATE MTCRECV_TESTING)
 
-    add_test(NAME test_fade_registry_bench COMMAND test_fade_registry_bench)
-    set_tests_properties(test_fade_registry_bench PROPERTIES LABELS "integration")
+    add_test(NAME test_motion_registry_bench COMMAND test_motion_registry_bench)
+    set_tests_properties(test_motion_registry_bench PROPERTIES LABELS "integration")
 endif()

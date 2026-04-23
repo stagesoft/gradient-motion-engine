@@ -23,7 +23,7 @@
  * |------------------|--------------------------------------------------------------------|
  * | start_fade       | fade_id, node_name, osc_host, osc_port, osc_path, start_value,     |
  * |                  | end_value, duration_ms, curve_type, start_mtc_ms                   |
- * | cancel_fade      | fade_id, node_name                                                 |
+ * | cancel_motion    | motion_id (alias: fade_id), node_name                              |
  * | cancel_all       | node_name                                                          |
  * | start_crossfade  | start_fade fields + partner_fade_id, partner_osc_path,             |
  * |                  | partner_start_value, partner_end_value                             |
@@ -57,7 +57,7 @@
  *       case gme::signal::ParseResult::MissingField:
  *       case gme::signal::ParseResult::TypeError:
  *           if (!cmd.fade_id.empty())
- *               client.sendStatus(StatusKind::FadeError, cmd.fade_id, "parse_error");
+ *               client.sendStatus(StatusKind::MotionError, cmd.fade_id, "parse_error");
  *           break;
  *       default:
  *           // Log only.
@@ -87,8 +87,8 @@ struct FadeCommand {
      */
     enum class Type {
         START_FADE,      ///< Start a single fade on one OSC endpoint.
-        CANCEL_FADE,     ///< Cancel an active fade by fade_id.
-        CANCEL_ALL,      ///< Cancel every active fade (project unload/stop).
+        CANCEL_MOTION,   ///< Cancel an active motion by fade_id (wire key: "cancel_motion").
+        CANCEL_ALL,      ///< Cancel every active motion (project unload/stop).
         START_CROSSFADE  ///< Start two linked fades sharing timing + curve.
     };
 
@@ -203,7 +203,7 @@ enum class ParseOutcomeAction {
     Enqueue,        ///< Push the parsed `FadeCommand` into the queue.
     DropSilent,     ///< Not for us; do not log, do not emit status.
     LogOnly,        ///< Emit `GME_LOG_WARNING`; no `fade_error` (no fade_id context).
-    LogAndStatus    ///< Emit `GME_LOG_WARNING` AND `sendStatus(FadeError, fade_id, "parse_error")`.
+    LogAndStatus    ///< Emit `GME_LOG_WARNING` AND `sendStatus(MotionError, fade_id, "parse_error")`.
 };
 
 /**
@@ -226,7 +226,7 @@ enum class ParseOutcomeAction {
  *           break;
  *       case ParseOutcomeAction::LogAndStatus:
  *           GME_LOG_WARNING("parse rejected: " + describeParseResult(r));
- *           sendStatus(StatusKind::FadeError, cmd.fade_id, "parse_error");
+ *           sendStatus(StatusKind::MotionError, cmd.fade_id, "parse_error");
  *           break;
  *   }
  * @endcode

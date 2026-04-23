@@ -1,10 +1,10 @@
 /**
  * @file GradientEngine.h
  * @brief Top-level orchestrator wiring MtcTickSource, NngBusClient, and
- *        FadeRegistry into the Phase 4 evaluation pipeline.
+ *        MotionRegistry into the Phase 4 evaluation pipeline.
  *
  * `GradientEngine` owns all three subsystems and is the single point of
- * initialization and shutdown for the daemon's fade-evaluation core.
+ * initialization and shutdown for the daemon's motion-evaluation core.
  *
  * ## Architecture note
  *
@@ -40,7 +40,7 @@
 
 #pragma once
 
-#include "engine/FadeRegistry.h"
+#include "motion/MotionRegistry.h"
 #include "signal/FadeCommand.h"
 #include "signal/LockFreeQueue.h"
 #include "signal/StatusEmitRequest.h"
@@ -80,7 +80,7 @@ struct GradientEngineConfig {
  *  - `LockFreeQueue<FadeCommand, 64>` (command queue: NNG → tick)
  *  - `LockFreeQueue<StatusEmitRequest, 64>` (status queue: tick → NNG worker)
  *  - `NngBusClient` (NNG I/O + status worker thread)
- *  - `FadeRegistry` (evaluation + OSC send)
+ *  - `MotionRegistry` (evaluation + transport output)
  */
 class GradientEngine {
 public:
@@ -99,21 +99,12 @@ public:
     /**
      * @brief Open MIDI port, open NNG socket, start all worker threads.
      *
-     * Registers `onTick` as the MTC quarter-frame callback. After this call,
-     * `FadeRegistry::tick` fires on every MTC quarter frame.
-     *
      * @param config  Engine configuration (MIDI port, NNG URL, node name).
      *
      * @return `true` on success. `false` if MIDI port not found or NNG socket
-     *         failed to open. Error details are logged.
+     *         failed to open.
      *
      * @throws Never.
-     *
-     * @par Example:
-     * @code
-     *   if (!engine.initialize({"MTC", "tcp://127.0.0.1:9093", "node1"}))
-     *       return 1;
-     * @endcode
      */
     bool initialize(const GradientEngineConfig& config);
 
@@ -121,7 +112,7 @@ public:
      * @brief Graceful teardown.
      *
      * 1. Deregisters tick callback.
-     * 2. Calls `FadeRegistry::cancelAll()` (no final OSC values sent).
+     * 2. Calls `MotionRegistry::cancelAll()` (no final OSC values sent).
      * 3. Calls `NngBusClient::stop()` (joins recv + drain + status worker).
      *
      * Safe to call more than once (idempotent).
@@ -136,8 +127,11 @@ private:
      *
      * Fires from the RtMidi MIDI callback thread (lock-free path required).
      *
-     * 1. Try drain: `nngClient_->drainOnce(applyCmd)`.
-     * 2. `registry_->tick(mtc_ms)`.
+     * 1. Set tick-thread context on registry.
+     * 2. Try drain: `nngClient_->drainOnce(applyCmd)`.
+     * 3. `registry_->tick(mtc_ms)`.
+     * 4. Clear tick-thread context.
+     * 5. Flush statusQueue_ into NngBusClient.
      *
      * @param mtc_ms  Current MTC head position in milliseconds.
      */
@@ -151,7 +145,7 @@ private:
     gme::signal::LockFreeQueue<gme::signal::FadeCommand, 64>        queue_;
     gme::signal::LockFreeQueue<gme::signal::StatusEmitRequest, 64>  statusQueue_;
     std::unique_ptr<gme::daemon::comms::NngBusClient>               nngClient_;
-    std::unique_ptr<FadeRegistry>                                   registry_;
+    std::unique_ptr<gme::motion::MotionRegistry>                    registry_;
 
     bool initialized_ = false;
 };

@@ -277,7 +277,7 @@ static bool test_outbound_status() {
     std::this_thread::sleep_for(50ms); // allow connection
 
     // Client sends a status message; hub receives it
-    client.sendStatus(StatusKind::FadeComplete, "fade_test1");
+    client.sendStatus(StatusKind::MotionComplete, "fade_test1");
 
     // Poll hub for the status message
     void*  buf  = nullptr;
@@ -294,7 +294,7 @@ static bool test_outbound_status() {
     CHECK(!env.is_discarded(), "outbound status JSON valid");
     CHECK(env.value("target", "") == "gradientengine", "outbound target=gradientengine");
     CHECK(env.contains("data"), "outbound has data");
-    CHECK(env["data"].value("event", "") == "fade_complete", "outbound event=fade_complete");
+    CHECK(env["data"].value("event", "") == "motion_complete", "outbound event=motion_complete");
     CHECK(env["data"].value("fade_id", "") == "fade_test1", "outbound fade_id=fade_test1");
 
     client.stop();

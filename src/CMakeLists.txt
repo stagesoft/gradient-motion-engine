@@ -1,7 +1,6 @@
 set(GME_SOURCES
     time/time.cpp
     time/MtcTickSource.cpp
-    motion/motion.cpp
     gradient/SigmoidCurve.cpp
     gradient/BezierCurve.cpp
     gradient/ResampledCurve.cpp
@@ -9,7 +8,9 @@ set(GME_SOURCES
     signal/signal.cpp
     signal/FadeCommand.cpp
     osc/OscSender.cpp
-    engine/FadeRegistry.cpp
+    motion/MotionRegistry.cpp
+    motion/FadeMotion.cpp
+    motion/MotionFactory.cpp
 )
 
 add_library(gradient_motion STATIC ${GME_SOURCES})

@@ -78,10 +78,14 @@ ParseResult parseStartFade(const nlohmann::json& data, FadeCommand& out) {
     return ParseResult::Ok;
 }
 
-ParseResult parseCancelFade(const nlohmann::json& data, FadeCommand& out) {
-    out.type = FadeCommand::Type::CANCEL_FADE;
-    if (!getString(data, "fade_id", out.fade_id))
+ParseResult parseCancelMotion(const nlohmann::json& data, FadeCommand& out) {
+    out.type = FadeCommand::Type::CANCEL_MOTION;
+    // Accept "motion_id" (new wire key) or "fade_id" (legacy alias)
+    if (data.contains("motion_id") && data["motion_id"].is_string()) {
+        out.fade_id = data["motion_id"].get<std::string>();
+    } else if (!getString(data, "fade_id", out.fade_id)) {
         return data.contains("fade_id") ? ParseResult::TypeError : ParseResult::MissingField;
+    }
     return ParseResult::Ok;
 }
 
@@ -146,7 +150,7 @@ ParseResult parseFadeCommand(const nlohmann::json& envelope,
         return ParseResult::MalformedJson;
 
     if (command == "start_fade")      return parseStartFade(data, out);
-    if (command == "cancel_fade")     return parseCancelFade(data, out);
+    if (command == "cancel_motion")   return parseCancelMotion(data, out);
     if (command == "cancel_all")      return parseCancelAll(data, out);
     if (command == "start_crossfade") return parseStartCrossfade(data, out);
 

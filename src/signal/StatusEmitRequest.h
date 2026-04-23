@@ -3,7 +3,7 @@
  * @brief Status kind enum and status-emit tuple pushed from the tick thread to
  *        the NNG status worker thread.
  *
- * Defined in `libgradient_motion` (`src/signal/`) so that `FadeRegistry`
+ * Defined in `libgradient_motion` (`src/signal/`) so that `MotionRegistry`
  * can produce status tuples without depending on any daemon header.
  * `NngBusClient` (daemon side) keeps a `using StatusKind = gme::signal::StatusKind`
  * alias so its existing call sites compile unchanged.
@@ -11,15 +11,15 @@
  * ## Allocation note
  *
  * `std::string` members (`fade_id`, `reason`) are **not** on the per-frame
- * steady-state tick path — they are copied only when a fade completes or
+ * steady-state tick path — they are copied only when a motion completes or
  * errors (non-recurring lifecycle events). This is acceptable per
  * Constitution Principle IV.
  *
  * @par Example usage:
  * @code
  *   gme::signal::StatusEmitRequest req;
- *   req.kind    = gme::signal::StatusKind::FadeComplete;
- *   req.fade_id = fade.fade_id;
+ *   req.kind    = gme::signal::StatusKind::MotionComplete;
+ *   req.fade_id = motion.motion_id;
  *   if (!statusQueue_.push(std::move(req)))
  *       GME_LOG_WARNING("status queue overflow — oldest dropped");
  * @endcode
@@ -33,14 +33,22 @@ namespace gme {
 namespace signal {
 
 /**
- * @brief Discriminates between a successful fade completion and an error event.
+ * @brief Discriminates between a successful motion completion and an error event.
  *
- * - `FadeComplete` — serialised as `data.event: "fade_complete"`.
- * - `FadeError`    — serialised as `data.event: "fade_error"`.
+ * - `MotionComplete` — serialised as `data.event: "motion_complete"`.
+ * - `MotionError`    — serialised as `data.event: "motion_error"`.
+ *
+ * Standard reason strings for `MotionError`:
+ *  - `"osc_send_failed"` — consecutive OSC failures reached threshold.
+ *  - `"osc_address_failed"` — `lo_address_new` returned null.
+ *  - `"unknown_curve_type"` — `CurveFactory::createCurve` returned nullopt.
+ *  - `"superseded"` — a new motion replaced this one on the same OSC path.
+ *  - `"duplicate_motion_id"` — incoming motion reused an already-active id.
+ *  - `"parse_error"` — NNG envelope failed validation.
  */
 enum class StatusKind {
-    FadeComplete, ///< Fade reached t = 1.0 and was removed from the registry.
-    FadeError     ///< Fade was removed due to an error (see reason field).
+    MotionComplete, ///< Motion reached t = 1.0 and was removed from the registry.
+    MotionError     ///< Motion was removed due to an error (see reason field).
 };
 
 /**
@@ -53,9 +61,9 @@ enum class StatusKind {
  * @see NngBusClient::statusWorkerLoop
  */
 struct StatusEmitRequest {
-    StatusKind  kind    = StatusKind::FadeComplete; ///< Event kind.
-    std::string fade_id;                            ///< Originating fade identifier.
-    std::string reason;                             ///< Non-empty for FadeError (e.g. "osc_send_failed").
+    StatusKind  kind    = StatusKind::MotionComplete; ///< Event kind.
+    std::string fade_id;  ///< Originating motion identifier (wire field name preserved; rename deferred to wire-v2).
+    std::string reason;   ///< Non-empty for MotionError (e.g. "osc_send_failed").
 };
 
 } // namespace signal

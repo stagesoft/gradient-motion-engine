@@ -155,7 +155,7 @@ void NngBusClient::recvLoop() {
                 break;
             case ParseOutcomeAction::LogAndStatus:
                 GME_LOG_WARNING("NngBusClient: parse error for fade_id=" + cmd.fade_id);
-                sendStatus(StatusKind::FadeError, cmd.fade_id, "parse_error");
+                sendStatus(StatusKind::MotionError, cmd.fade_id, "parse_error");
                 break;
         }
 
@@ -205,7 +205,7 @@ void NngBusClient::sendStatus(StatusKind kind,
                                const std::string& reason) {
     if (!sock_) return;
 
-    const char* event = (kind == StatusKind::FadeComplete) ? "fade_complete" : "fade_error";
+    const char* event = (kind == StatusKind::MotionComplete) ? "motion_complete" : "motion_error";
 
     nlohmann::json data = {
         {"event",     event},
