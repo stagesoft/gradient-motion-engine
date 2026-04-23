@@ -1,3 +1,10 @@
+/*
+ * ***
+ * SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * ***
+ */
+
 /**
  * @file FadeCommand.h
  * @brief Command record dispatched from the Controller to the fade engine.

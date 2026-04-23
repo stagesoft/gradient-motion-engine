@@ -1,9 +1,16 @@
+/*
+ * ***
+ * SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * ***
+ */
+
 /**
  * @file logging.h
  * @brief Compile-time logging abstraction for the gradient-motiond daemon.
  *
  * Selects between CuemsLogger (syslog-based, journal-integrated) and a
- * standard library fallback (<iostream> to stderr) based on the
+ * standard library fallback (stderr via \c iostream) based on the
  * HAVE_CUEMS_LOGGER preprocessor define, which is controlled by the
  * CMake option ENABLE_CUEMS_LOGGER.
  *

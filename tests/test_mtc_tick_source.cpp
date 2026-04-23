@@ -1,3 +1,10 @@
+/*
+ * ***
+ * SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * ***
+ */
+
 /**
  * @file test_mtc_tick_source.cpp
  * @brief Unit tests for gme::time::MtcTickSource — no MIDI hardware required.

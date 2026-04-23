@@ -1,3 +1,10 @@
+/*
+ * ***
+ * SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * ***
+ */
+
 /**
  * @file test_motion_registry.cpp
  * @brief Lifecycle-only unit tests for MotionRegistry, using a TestMotion

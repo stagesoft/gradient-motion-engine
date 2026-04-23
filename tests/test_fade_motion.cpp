@@ -1,3 +1,10 @@
+/*
+ * ***
+ * SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * ***
+ */
+
 /**
  * @file test_fade_motion.cpp
  * @brief Behavioural regression tests for the FadeMotion + MotionRegistry stack.

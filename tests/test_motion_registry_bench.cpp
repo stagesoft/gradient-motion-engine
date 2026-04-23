@@ -1,3 +1,10 @@
+/*
+ * ***
+ * SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * ***
+ */
+
 /**
  * @file test_motion_registry_bench.cpp
  * @brief SC-007 loopback OSC benchmark: 50 concurrent fades at 200 Hz.

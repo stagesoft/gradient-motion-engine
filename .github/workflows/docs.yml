@@ -1,0 +1,64 @@
+# ***
+# SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
+# SPDX-License-Identifier: GPL-3.0-or-later
+# ***
+
+# Build Doxygen HTML and deploy to GitHub Pages when `main` is updated.
+# One-time: repo Settings → Pages → Build and deployment → Source: GitHub Actions.
+name: Deploy API documentation
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake \
+            doxygen \
+            g++ \
+            graphviz \
+            liblo-dev \
+            nlohmann-json3-dev \
+            libtinyxml2-dev \
+            pkg-config
+
+      - name: Configure (library + docs only)
+        run: cmake -B build -DBUILD_DAEMON=OFF
+
+      - name: Generate Doxygen
+        run: cmake --build build --target docs
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/docs/html
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

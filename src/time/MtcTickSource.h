@@ -1,3 +1,10 @@
+/*
+ * ***
+ * SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * ***
+ */
+
 /**
  * @file MtcTickSource.h
  * @brief Timecode tick source driven by MTC quarter-frame messages.
@@ -26,7 +33,7 @@
  * and decoder state. Only one MtcTickSource may exist per process at a
  * time. Constructing a second instance produces undefined behaviour.
  *
- * @example Typical usage:
+ * @par Typical usage
  * @code
  *   gme::time::MtcTickSource src;
  *
@@ -109,7 +116,7 @@ public:
      * @param cb  Callable invoked with the current MTC head position (ms).
      *            Pass an empty std::function to deregister.
      *
-     * @example
+     * @par Example
      * @code
      *   src.setTickCallback([](long ms) { engine.evaluateAt(ms); });
      *   // ... later, to stop receiving:
@@ -134,7 +141,7 @@ public:
      * @return MtcStartError::kNoPortsAvailable if no MIDI ports exist.
      * @return MtcStartError::kPortNotFound     if no port matches.
      *
-     * @example
+     * @par Example
      * @code
      *   auto err = src.start("MTC");
      *   if (err != gme::time::MtcStartError::kOk) {
@@ -152,7 +159,7 @@ public:
      *
      * @return Current MTC head in ms. Returns 0 if MTC has never started.
      *
-     * @example
+     * @par Example
      * @code
      *   long pos = src.getMtcMs();  // 0 before start(), timecode ms after
      * @endcode
@@ -167,7 +174,7 @@ public:
      *
      * @return true if MTC is actively running, false if stopped or not started.
      *
-     * @example
+     * @par Example
      * @code
      *   bool active = src.isRunning();  // true while MTC is playing
      * @endcode

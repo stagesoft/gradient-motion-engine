@@ -1,3 +1,8 @@
+# ***
+# SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
+# SPDX-License-Identifier: GPL-3.0-or-later
+# ***
+
 add_executable(test_curves test_curves.cpp)
 
 target_include_directories(test_curves PRIVATE

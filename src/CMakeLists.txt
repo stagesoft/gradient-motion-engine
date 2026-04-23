@@ -1,11 +1,14 @@
+# ***
+# SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
+# SPDX-License-Identifier: GPL-3.0-or-later
+# ***
+
 set(GME_SOURCES
-    time/time.cpp
     time/MtcTickSource.cpp
     gradient/SigmoidCurve.cpp
     gradient/BezierCurve.cpp
     gradient/ResampledCurve.cpp
     gradient/CurveFactory.cpp
-    signal/signal.cpp
     signal/FadeCommand.cpp
     osc/OscSender.cpp
     motion/MotionRegistry.cpp

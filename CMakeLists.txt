@@ -1,3 +1,26 @@
+# ***
+# SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
+# SPDX-License-Identifier: GPL-3.0-or-later
+# ***
+#
+# Copyright (C) 2026 Stagelab Coop SCCL
+# Authors: Adrià Masip <adria@stagelab.coop>
+#
+# This file is part of gradient-motion-engine.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 cmake_minimum_required(VERSION 3.10)
 # Allow target_link_libraries() on targets defined in other directories
 # (needed to link cuemslogger into mtcreceiver from the root CMakeLists)
@@ -92,9 +115,12 @@ if(DOXYGEN_FOUND)
     set(DOXYGEN_WARN_AS_ERROR YES)
     set(DOXYGEN_GENERATE_HTML YES)
     set(DOXYGEN_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/docs")
+    # Show file paths in HTML relative to the repo root (not absolute build-tree paths)
+    set(DOXYGEN_STRIP_FROM_PATH "${CMAKE_SOURCE_DIR}")
     doxygen_add_docs(docs
         "${CMAKE_SOURCE_DIR}/src"
-        COMMENT "Generating API documentation with Doxygen"
+        "${CMAKE_SOURCE_DIR}/daemon"
+        COMMENT "Generating API documentation with Doxygen (lib + daemon)"
     )
     message(STATUS "Doxygen found — run 'cmake --build . --target docs' to generate API docs")
 else()

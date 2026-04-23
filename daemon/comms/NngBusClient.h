@@ -1,3 +1,10 @@
+/*
+ * ***
+ * SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ * ***
+ */
+
 /**
  * @file NngBusClient.h
  * @brief Daemon-side NNG bus0 client: ingest, filter, parse, enqueue; emit status.
