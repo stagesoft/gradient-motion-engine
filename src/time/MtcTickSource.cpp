@@ -14,13 +14,44 @@
 
 #include <climits>
 
+// #region DEBUG — Phase 7 MTC-bias verification instrumentation.
+// Dropped by Adrià pre-main-merge per commit-message scope prefix.
+#include <chrono>
+#include <ctime>
+#include <fstream>
+#include <iomanip>
+#include <sys/stat.h>
+namespace {
+void fade_dbg_log(long mtc_ms) {
+    try {
+        mkdir("/tmp/.claude", 0755);
+        auto now_sys = std::chrono::system_clock::now();
+        auto us = std::chrono::duration_cast<std::chrono::microseconds>(
+            now_sys.time_since_epoch()) % 1000000;
+        auto t = std::chrono::system_clock::to_time_t(now_sys);
+        std::tm tm_buf{};
+        localtime_r(&t, &tm_buf);
+        struct timespec mono{};
+        clock_gettime(CLOCK_MONOTONIC, &mono);
+        long long mono_ns = static_cast<long long>(mono.tv_sec) * 1000000000LL + mono.tv_nsec;
+        std::ofstream f("/tmp/.claude/debug.log", std::ios::app);
+        f << "[" << std::put_time(&tm_buf, "%Y-%m-%dT%H:%M:%S")
+          << "." << std::setw(6) << std::setfill('0') << us.count()
+          << "] [FADE] tick mtc_ms=" << mtc_ms
+          << " clock_monotonic_ns=" << mono_ns << "\n";
+    } catch (...) {}
+}
+}
+// #endregion DEBUG
+
 namespace gme {
 namespace time {
 
 void MtcTickSource::setTickCallback(std::function<void(long)> cb) {
     if (cb) {
         MtcReceiver::setTickCallback(
-            [cb = std::move(cb)](long ms, bool /*isCompleteFrame*/) {
+            [cb = std::move(cb)](long ms, bool isCompleteFrame) {
+                if (isCompleteFrame) fade_dbg_log(ms);
                 cb(ms);
             });
     } else {
