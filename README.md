@@ -1,7 +1,18 @@
+<!--
+***
+SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
+SPDX-License-Identifier: GPL-3.0-or-later
+***
+-->
 
 # Gradient Motion Engine
 
+**Current release: v0.1.0** — see [CHANGELOG.md](./CHANGELOG.md).
+
 **Timecode-driven motion and gradient evaluation engine with OSC output.**
+
+* **Source / issues:** [stagesoft/gradient-motion-engine](https://github.com/stagesoft/gradient-motion-engine) on GitHub
+* **API reference (HTML):** [stagesoft.github.io/gradient-motion-engine](https://stagesoft.github.io/gradient-motion-engine/) (built from `main` via GitHub Pages)
 
 `gradient-motion-engine` is a C++ system for defining and evaluating **time-based motion trajectories** and **value gradients**, producing structured **OSC (Open Sound Control)** messages in real time.
 
@@ -88,6 +99,20 @@ systemctl start gradient-motiond
 * **Real-time capable** — suitable for continuous execution under systemd
 * **Embeddable** — core logic available via `libgradient_motion`
 * **Protocol-agnostic core** — OSC isolated to the output layer
+
+---
+
+## Copyright notice
+
+Copyright © 2026 Stagelab Coop SCCL. Authors include Adrià Masip (`adria@stagelab.coop`).
+
+This work is part of **gradient-motion-engine**. It is free software: you can redistribute it and/or modify it under the terms of the **GNU General Public License** as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but **without any warranty**; without even the implied warranty of **merchantability** or **fitness for a particular purpose**. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with this program. If not, see [https://www.gnu.org/licenses/](https://www.gnu.org/licenses/).
+
+The SPDX short form of this notice is: `SPDX-License-Identifier: GPL-3.0-or-later`.
 
 ---
 

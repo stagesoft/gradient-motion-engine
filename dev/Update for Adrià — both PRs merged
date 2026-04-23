@@ -1,0 +1,76 @@
+Update for Adrià — both PRs merged
+
+Asunto: mtcreceiver — #4 y #5 merged, tu turno para gradient-motion-engine
+
+Hola Adrià,
+
+Los dos PRs que discutimos ya están en main:
+
+ - #4 fix/quarter-frame-callback-safety (breaking): nueva API
+   thread-safe + single-fire-per-QF con flag isCompleteFrame.
+ - #5 fix/mtcframe-conversions-and-fullframe-reset (non-breaking):
+   bugs P4/P5/P6/P8 preexistentes.
+
+Tip de main ahora en 59fc76e. Versión declarada: 2.0.0.
+
+Cambios que te afectan en gradient-motion-engine (feat/base-code):
+
+1) Bump del submódulo mtcreceiver a 59fc76e.
+2) src/time/MtcTickSource.cpp — migrar de asignación directa a
+   setTickCallback(). Adapter para ignorar el flag por ahora:
+
+   void MtcTickSource::setTickCallback(std::function<void(long)> cb) {
+       if (cb) {
+           MtcReceiver::setTickCallback(
+               [cb = std::move(cb)](long ms, bool /*isComplete*/) {
+                   cb(ms);
+               });
+       } else {
+           MtcReceiver::setTickCallback({});
+       }
+   }
+
+3) Recomendado: destructor de MtcTickSource que haga
+   MtcReceiver::setTickCallback({}) para la garantía de
+   no-call-after-unregister (bloquea hasta que cualquier callback
+   en vuelo retorne).
+
+4) tests/test_mtc_tick_source.cpp — la API antigua
+   (MtcReceiver::onQuarterFrame = ... / MtcReceiver::onQuarterFrame(x))
+   ya no existe. Dos helpers nuevos en mtcreceiver bajo
+   -DMTCRECV_TESTING:
+     - invokeTickForTesting(long ms, bool isCompleteFrame)
+     - SkipPortOpenTag constructor (construye sin abrir puerto MIDI)
+     - decodeQuarterFrameForTesting / decodeFullFrameForTesting
+     - resetDecoderStateForTesting / resetStaticStateForTesting
+   El test_callback.cpp que añadí en el PR1 (tests/) sirve como
+   plantilla para adaptar los Scenarios A, B, C y
+   testSyntheticMtcStream.
+
+5) Mientras actualizas los tests: el synthetic stream test itera
+   1200 ticks a 10 ms cada uno (= 12 s wall-clock a 100 Hz, que es la
+   tasa real de QF a 25 fps — no 200 Hz como dice la spec). La spec
+   SC-001/002 dice 60 s; asumimos que es un typo y que el test real es
+   12 s / 1200 ticks. Corrige la spec cuando pases por ella.
+
+6) Cambios semánticos a tener en cuenta:
+   - Los callbacks fantasma en secuencias QF inválidas (reset==true)
+     ya no suceden. Si tu código esperaba esos, no llegarán.
+   - QF 8 ya no dispara dos veces (Site 1 + Site 2). Dispara una vez
+     con isCompleteFrame=true. Ignora ese flag si no te importa.
+   - Primeras QFs en sentido inverso (antes de que se detecte
+     direction=-1): ahora suprimidas hasta que la secuencia se
+     estabilice (6 callbacks en un stream backwards completo en lugar
+     de 8).
+
+Los tres consumidores in-tree ya tienen PRs abiertos con el bump del
+submódulo:
+ - cuems-videocomposer #? (chore/bump-mtcreceiver-to-main)
+ - cuems-dmxplayer #? (chore/bump-mtcreceiver-to-main)
+ - cuems-audioplayer #? (chore/bump-submodules — también repara dos
+   submódulos stale de cuemslogger y oscreceiver que tenían SHA
+   inválido o desviado)
+
+Cualquier duda sobre la nueva API o los tests, avísame.
+
+Ion (Mas bien CLaude XD)
