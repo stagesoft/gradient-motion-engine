@@ -24,6 +24,7 @@ ConfigurationManager::ConfigurationManager()
     : midiPort_("Midi Through Port-0")
     , logLevel_("info")
     , confPath_("/etc/cuems")
+    , nngUrl_("tcp://127.0.0.1:9093")
     , nodeName_("")
 {
 }
@@ -33,6 +34,7 @@ int ConfigurationManager::parseArgs(int argc, char** argv) {
         {"midi-port",  required_argument, nullptr, 'm'},
         {"log-level",  required_argument, nullptr, 'l'},
         {"conf-path",  required_argument, nullptr, 'c'},
+        {"nng-url",    required_argument, nullptr, 'u'},
         {"node-name",  required_argument, nullptr, 'n'},
         {"help",       no_argument,       nullptr, 'h'},
         {"version",    no_argument,       nullptr, 'V'},
@@ -43,7 +45,7 @@ int ConfigurationManager::parseArgs(int argc, char** argv) {
     optind = 1;
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "m:l:c:n:hV", longOptions, nullptr)) != -1) {
+    while ((opt = getopt_long(argc, argv, "m:l:c:u:n:hV", longOptions, nullptr)) != -1) {
         switch (opt) {
             case 'm':
                 midiPort_ = optarg;
@@ -53,6 +55,9 @@ int ConfigurationManager::parseArgs(int argc, char** argv) {
                 break;
             case 'c':
                 confPath_ = optarg;
+                break;
+            case 'u':
+                nngUrl_ = optarg;
                 break;
             case 'n':
                 nodeName_ = optarg;
@@ -102,6 +107,8 @@ void ConfigurationManager::printUsage() const {
         << "                           (default: info)\n"
         << "  -c, --conf-path <path>   Path to CUEMS configuration directory\n"
         << "                           (default: /etc/cuems)\n"
+        << "  -u, --nng-url <url>      NNG bus dial URL\n"
+        << "                           (default: tcp://127.0.0.1:9093)\n"
         << "  -n, --node-name <name>   Node name for NNG bus filtering\n"
         << "                           (default: system hostname)\n"
         << "  -h, --help               Print this help message and exit\n"

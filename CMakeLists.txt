@@ -113,10 +113,13 @@ if(BUILD_DAEMON)
         daemon/GradientEngineApplication.cpp
         daemon/config/ConfigurationManager.cpp
         daemon/comms/NngBusClient.cpp
+        src/engine/GradientEngine.cpp
     )
 
     target_include_directories(gradient-motiond PRIVATE
         ${CMAKE_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/daemon
     )
 
     target_link_libraries(gradient-motiond PRIVATE
@@ -126,6 +129,11 @@ if(BUILD_DAEMON)
         nng::nng
         pthread
     )
+
+    if(LIBLO_FOUND)
+        target_link_libraries(gradient-motiond PRIVATE ${LIBLO_LIBRARIES})
+        target_include_directories(gradient-motiond PRIVATE ${LIBLO_INCLUDE_DIRS})
+    endif()
 
     if(ENABLE_CUEMS_LOGGER)
         target_compile_definitions(gradient-motiond PRIVATE HAVE_CUEMS_LOGGER)

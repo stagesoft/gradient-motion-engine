@@ -8,8 +8,8 @@ set(GME_SOURCES
     gradient/CurveFactory.cpp
     signal/signal.cpp
     signal/FadeCommand.cpp
-    osc/osc.cpp
-    engine/engine.cpp
+    osc/OscSender.cpp
+    engine/FadeRegistry.cpp
 )
 
 add_library(gradient_motion STATIC ${GME_SOURCES})
@@ -22,3 +22,10 @@ target_include_directories(gradient_motion PUBLIC
 target_link_libraries(gradient_motion PUBLIC
     nlohmann_json::nlohmann_json
 )
+
+if(LIBLO_FOUND)
+    target_link_libraries(gradient_motion PUBLIC ${LIBLO_LIBRARIES})
+    target_include_directories(gradient_motion PUBLIC ${LIBLO_INCLUDE_DIRS})
+else()
+    message(FATAL_ERROR "liblo not found — required for gme::osc. Install liblo-dev.")
+endif()

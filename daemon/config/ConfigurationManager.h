@@ -12,6 +12,7 @@
  * | --midi-port    | -m    | string | "Midi Through Port-0"|
  * | --log-level    | -l    | string | "info"               |
  * | --conf-path    | -c    | string | "/etc/cuems"         |
+ * | --nng-url      | -u    | string | "tcp://127.0.0.1:9093"|
  * | --node-name    | -n    | string | hostname             |
  * | --help         | -h    | flag   | —                    |
  * | --version      | -V    | flag   | —                    |
@@ -88,6 +89,9 @@ public:
     /** @brief Get the configured CUEMS configuration directory path. */
     const std::string& getConfPath() const { return confPath_; }
 
+    /** @brief Get the NNG dial URL (from --nng-url). */
+    const std::string& getNngUrl() const { return nngUrl_; }
+
     /** @brief Get the node name (from --node-name or hostname default). */
     const std::string& getNodeName() const { return nodeName_; }
 
@@ -95,6 +99,7 @@ private:
     std::string midiPort_;
     std::string logLevel_;
     std::string confPath_;
+    std::string nngUrl_;
     std::string nodeName_;
 
     /**

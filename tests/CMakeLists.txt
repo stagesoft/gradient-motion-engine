@@ -84,3 +84,47 @@ if(BUILD_DAEMON)
     add_test(NAME test_nng_integration COMMAND test_nng_integration)
     set_tests_properties(test_nng_integration PROPERTIES LABELS "integration")
 endif()
+
+# ── FadeRegistry unit tests (Phase 4) ────────────────────────────────────────
+if(BUILD_DAEMON AND LIBLO_FOUND)
+    add_executable(test_fade_registry test_fade_registry.cpp)
+
+    target_include_directories(test_fade_registry PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}
+    )
+
+    target_link_libraries(test_fade_registry PRIVATE
+        gradient_motion
+        mtcreceiver
+        ${RTMIDI_LIBRARIES}
+        ${LIBLO_LIBRARIES}
+        pthread
+    )
+
+    target_compile_definitions(test_fade_registry PRIVATE MTCRECV_TESTING)
+
+    add_test(NAME test_fade_registry COMMAND test_fade_registry)
+    set_tests_properties(test_fade_registry PROPERTIES LABELS "unit")
+
+    # ── OSC loopback benchmark (SC-007) ──────────────────────────────────────
+    add_executable(test_fade_registry_bench test_fade_registry_bench.cpp)
+
+    target_include_directories(test_fade_registry_bench PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}
+    )
+
+    target_link_libraries(test_fade_registry_bench PRIVATE
+        gradient_motion
+        mtcreceiver
+        ${RTMIDI_LIBRARIES}
+        ${LIBLO_LIBRARIES}
+        pthread
+    )
+
+    target_compile_definitions(test_fade_registry_bench PRIVATE MTCRECV_TESTING)
+
+    add_test(NAME test_fade_registry_bench COMMAND test_fade_registry_bench)
+    set_tests_properties(test_fade_registry_bench PROPERTIES LABELS "integration")
+endif()

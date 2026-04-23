@@ -47,6 +47,10 @@ class CuemsLogger;
 
 class ConfigurationManager;
 
+// Forward-declare to avoid pulling GradientEngine.h (and its transitive
+// daemon headers) into every translation unit that includes this header.
+namespace gme { namespace engine { class GradientEngine; } }
+
 /**
  * @brief Top-level daemon application managing lifecycle and subsystems.
  *
@@ -109,7 +113,8 @@ private:
     bool running_;
     bool initialized_;
     bool shutdownComplete_;
-    std::unique_ptr<ConfigurationManager> config_;
+    std::unique_ptr<ConfigurationManager>     config_;
+    std::unique_ptr<gme::engine::GradientEngine> engine_;
 
 #ifdef HAVE_CUEMS_LOGGER
     CuemsLogger* logger_;

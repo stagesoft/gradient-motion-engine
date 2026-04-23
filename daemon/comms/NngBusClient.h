@@ -11,9 +11,14 @@
  *    `parseFadeCommand` → `queue_.push`;
  *  - a 100 ms fallback drain thread that calls `drainOnce()` while
  *    MTC ticks are paused (US3);
- *  - a thread-safe `sendStatus(...)` method used by the fade
- *    subsystem (Phase 4) and by the shutdown handler (FR-013) to
- *    emit `fade_complete` / `fade_error` messages.
+ *  - a **status worker thread** that pops `StatusEmitRequest` tuples
+ *    from the bounded SPSC `statusQueue_` (capacity 64, drop-oldest on
+ *    overflow) and calls `sendStatus` — keeping NNG I/O off the MTC
+ *    tick thread (FR-006b, FR-007);
+ *  - a thread-safe `sendStatus(...)` method used by the drain thread
+ *    (direct call) and by the status worker thread;
+ *  - a non-blocking `pushStatus(...)` method for the MTC tick thread
+ *    to enqueue completion / error notifications.
  *
  * Lives in `daemon/comms/` — **not** in `libgradient_motion`. Per the
  * project constitution (Principle V, Protocol-Agnostic Core), NNG
@@ -32,8 +37,13 @@
  *    concurrent MTC tick drains (US3).
  *  - `sendStatus()` is thread-safe — NNG's `nng_send` is safe on a
  *    single socket under NNG 1.10.
+ *  - `pushStatus()` is non-blocking / lock-free (uses `LockFreeQueue`).
+ *    Safe to call from the MTC tick thread. On queue full, oldest entry
+ *    is dropped with a warning log (FR-007).
  *  - `stop()` sets `running_ = false`, closes the socket (unblocking
- *    any in-flight `nng_recv`), and joins both threads.
+ *    any in-flight `nng_recv`), wakes the status worker, and joins all
+ *    three threads. Any residual status queue entries are flushed before
+ *    the worker exits.
  *
  * @par Example:
  * @code
@@ -53,6 +63,7 @@
 
 #include "signal/FadeCommand.h"
 #include "signal/LockFreeQueue.h"
+#include "signal/StatusEmitRequest.h"
 
 #include <atomic>
 #include <condition_variable>
@@ -71,16 +82,14 @@ namespace daemon {
 namespace comms {
 
 /**
- * @brief Status kinds emitted on the NNG bus.
+ * @brief Daemon-side alias for `gme::signal::StatusKind`.
  *
- * Serialised into the outbound envelope's `data.event` field.
- *  - `FadeComplete` → `data.event: "fade_complete"` (FR-006a).
- *  - `FadeError`    → `data.event: "fade_error"`    (FR-006b).
+ * `StatusKind` is defined in `src/signal/StatusEmitRequest.h` so that
+ * `libgradient_motion` (specifically `FadeRegistry`) can produce status
+ * tuples without depending on any daemon header. This alias keeps all
+ * existing `NngBusClient` call sites compiling unchanged.
  */
-enum class StatusKind {
-    FadeComplete,
-    FadeError
-};
+using StatusKind = gme::signal::StatusKind;
 
 /**
  * @brief Outcome of `NngBusClient::start`.
@@ -167,6 +176,24 @@ public:
     void drainOnce(const std::function<void(gme::signal::FadeCommand&)>& cb);
 
     /**
+     * @brief Push a status request onto the SPSC status worker queue.
+     *
+     * **Non-blocking and lock-free**. Safe to call from the MTC tick thread
+     * (FR-006b). If the 64-slot queue is full the oldest entry is dropped
+     * and a warning is logged (FR-007).
+     *
+     * @param req  Status tuple to enqueue. Moved into the queue.
+     *
+     * @throws None.
+     *
+     * @par Example:
+     * @code
+     *   client.pushStatus({ gme::signal::StatusKind::FadeComplete, fade_id, "" });
+     * @endcode
+     */
+    void pushStatus(gme::signal::StatusEmitRequest&& req);
+
+    /**
      * @brief Observe connection state for diagnostics / tests.
      *
      * @return `true` if the socket currently has an established connection.
@@ -176,11 +203,18 @@ public:
 private:
     void recvLoop();
     void fallbackDrainLoop();
+    void statusWorkerLoop();
 
     std::string  nodeName_;
     std::string  senderId_;
     gme::signal::LockFreeQueue<gme::signal::FadeCommand, 64>& queue_;
     std::function<void(gme::signal::FadeCommand&)> drainCallback_;
+
+    // Status worker: tick thread pushes into statusQueue_; worker pops + sends.
+    gme::signal::LockFreeQueue<gme::signal::StatusEmitRequest, 64> statusQueue_;
+    std::thread  statusWorkerThread_;
+    std::mutex   statusWorkerCv_mutex_;
+    std::condition_variable statusWorkerCv_;
 
     nng_socket*  sock_{nullptr};
     std::thread  recvThread_;

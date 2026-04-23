@@ -28,8 +28,8 @@ Single project: `src/`, `tests/`, `daemon/` at repository root (see plan.md).
 
 **Purpose**: Wire build system for new library sources, liblo, and Phase 4 tests.
 
-- [ ] T001 Link `liblo` into `gradient_motion` and replace stub sources with `src/osc/OscSender.cpp`, `src/engine/FadeRegistry.cpp`, `src/engine/GradientEngine.cpp` in `src/CMakeLists.txt` (see `specs/006-fade-registry-tick-loop/quickstart.md`)
-- [ ] T002 Add `test_fade_registry` (label `unit`) and `test_fade_registry_bench` (label `integration`) to `tests/CMakeLists.txt` per `specs/006-fade-registry-tick-loop/quickstart.md`
+- [x] T001 Link `liblo` into `gradient_motion` and replace stub sources with `src/osc/OscSender.cpp`, `src/engine/FadeRegistry.cpp`, `src/engine/GradientEngine.cpp` in `src/CMakeLists.txt` (see `specs/006-fade-registry-tick-loop/quickstart.md`)
+- [x] T002 Add `test_fade_registry` (label `unit`) and `test_fade_registry_bench` (label `integration`) to `tests/CMakeLists.txt` per `specs/006-fade-registry-tick-loop/quickstart.md`
 
 ---
 
@@ -39,12 +39,12 @@ Single project: `src/`, `tests/`, `daemon/` at repository root (see plan.md).
 
 **⚠️ CRITICAL**: No user story phase should be considered done until this phase is complete.
 
-- [ ] T003 Move `StatusKind` from `daemon/comms/NngBusClient.h` into a new `src/signal/StatusEmitRequest.h` and define `StatusEmitRequest` alongside it; keep a using-alias in `daemon/comms/NngBusClient.h` for existing call sites (avoid `libgradient_motion` depending on daemon headers; reconciles with `specs/006-fade-registry-tick-loop/data-model.md` — see analysis finding I2)
-- [ ] T004 Extend `daemon/comms/NngBusClient.h` and `daemon/comms/NngBusClient.cpp` with bounded `LockFreeQueue<StatusEmitRequest, 64>` (or capacity constant), **status worker thread** that pops and calls `sendStatus`, **drop-oldest on overflow** with warning log (FR-007, SC-002), `stop()` joining the worker, and **drain-serialisation helpers** for the MTC tick path (try-acquire / release pairing with existing `drain_in_progress_`, per `specs/006-fade-registry-tick-loop/research.md` Decision 1 and `specs/006-fade-registry-tick-loop/contracts/gradient-engine-api.md`)
-- [ ] T005 [P] Define `ActiveFade` per `specs/006-fade-registry-tick-loop/data-model.md` (including `crossfade_partner` always `nullptr` in Phase 4, `consecutive_osc_failures`, pre-built `lo_address`, `std::unique_ptr<gme::gradient::Curve>`) in `src/engine/ActiveFade.h`
-- [ ] T006 [P] Implement `gme::osc::sendFloat` and `gme::osc::makeAddress` in `src/osc/OscSender.h` and `src/osc/OscSender.cpp` per `specs/006-fade-registry-tick-loop/contracts/osc-sender-api.md`
-- [ ] T007 Declare `FadeRegistry` in `src/engine/FadeRegistry.h` with `kOscFailureThreshold`, dual indexes (`fades_`, `osc_index_`), `apply(FadeCommand&)`, `addFade`, `cancelFade`, `cancelAll`, `tick`, constructor deps (`MtcTickSource`, status queue, direct status callback) per `specs/006-fade-registry-tick-loop/data-model.md` and `specs/006-fade-registry-tick-loop/contracts/fade-registry-api.md`
-- [ ] T008 Declare `GradientEngine` + `GradientEngineConfig` in `src/engine/GradientEngine.h` per `specs/006-fade-registry-tick-loop/contracts/gradient-engine-api.md`
+- [x] T003 Move `StatusKind` from `daemon/comms/NngBusClient.h` into a new `src/signal/StatusEmitRequest.h` and define `StatusEmitRequest` alongside it; keep a using-alias in `daemon/comms/NngBusClient.h` for existing call sites (avoid `libgradient_motion` depending on daemon headers; reconciles with `specs/006-fade-registry-tick-loop/data-model.md` — see analysis finding I2)
+- [x] T004 Extend `daemon/comms/NngBusClient.h` and `daemon/comms/NngBusClient.cpp` with bounded `LockFreeQueue<StatusEmitRequest, 64>` (or capacity constant), **status worker thread** that pops and calls `sendStatus`, **drop-oldest on overflow** with warning log (FR-007, SC-002), `stop()` joining the worker, and **drain-serialisation helpers** for the MTC tick path (try-acquire / release pairing with existing `drain_in_progress_`, per `specs/006-fade-registry-tick-loop/research.md` Decision 1 and `specs/006-fade-registry-tick-loop/contracts/gradient-engine-api.md`)
+- [x] T005 [P] Define `ActiveFade` per `specs/006-fade-registry-tick-loop/data-model.md` (including `crossfade_partner` always `nullptr` in Phase 4, `consecutive_osc_failures`, pre-built `lo_address`, `std::unique_ptr<gme::gradient::Curve>`) in `src/engine/ActiveFade.h`
+- [x] T006 [P] Implement `gme::osc::sendFloat` and `gme::osc::makeAddress` in `src/osc/OscSender.h` and `src/osc/OscSender.cpp` per `specs/006-fade-registry-tick-loop/contracts/osc-sender-api.md`
+- [x] T007 Declare `FadeRegistry` in `src/engine/FadeRegistry.h` with `kOscFailureThreshold`, dual indexes (`fades_`, `osc_index_`), `apply(FadeCommand&)`, `addFade`, `cancelFade`, `cancelAll`, `tick`, constructor deps (`MtcTickSource`, status queue, direct status callback) per `specs/006-fade-registry-tick-loop/data-model.md` and `specs/006-fade-registry-tick-loop/contracts/fade-registry-api.md`
+- [x] T008 Declare `GradientEngine` + `GradientEngineConfig` in `src/engine/GradientEngine.h` per `specs/006-fade-registry-tick-loop/contracts/gradient-engine-api.md`
 
 **Checkpoint**: Foundation ready — user story implementation can begin.
 
@@ -60,15 +60,15 @@ Single project: `src/`, `tests/`, `daemon/` at repository root (see plan.md).
 
 > **NOTE**: Write these tests **first**; they must **FAIL** until implementation lands.
 
-- [ ] T009 [P] [US1] Add failing unit tests in `tests/test_fade_registry.cpp` for SC-001 (sigmoid at `t ≈ 0.5`), `duration_ms == 0` immediate completion, completion removal + final `end_value` OSC, rewind below `start_mtc_ms` yielding `start_value` for an **active** fade (FR-001), and FR-016 `start_mtc_ms == -1` sentinel resolution via `MtcTickSource::getMtcMs()`
+- [x] T009 [P] [US1] Add failing unit tests in `tests/test_fade_registry.cpp` for SC-001 (sigmoid at `t ≈ 0.5`), `duration_ms == 0` immediate completion, completion removal + final `end_value` OSC, rewind below `start_mtc_ms` yielding `start_value` for an **active** fade (FR-001), and FR-016 `start_mtc_ms == -1` sentinel resolution via `MtcTickSource::getMtcMs()`
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] Implement `FadeRegistry::addFade` for `FadeCommand::Type::START_FADE` in `src/engine/FadeRegistry.cpp`: `CurveFactory::createCurve` on tick thread (FR-015), resolve `start_mtc_ms == -1` via `MtcTickSource::getMtcMs()` (FR-016), build `lo_address`, handle `START_CROSSFADE` by log-and-drop only (spec assumptions). **Note**: FR-014 supersede is implemented in T017 (US2); US1 demos MUST use unique OSC targets.
-- [ ] T011 [US1] Implement `FadeRegistry::tick` core path in `src/engine/FadeRegistry.cpp`: `t` clamp + `duration_ms == 0 ⇒ t = 1.0` (contract), evaluate curve, `OscSender::sendFloat`, update `last_sent_value`, mark `completed` when `t >= 1.0`, send final `end_value`, remove completed entries from `fades_` and `osc_index_` — **defer** `FadeComplete` / `FadeError` queue pushes to User Story 2 (Phase 4) and **defer** OSC failure threshold handling to User Story 4 (Phase 6)
-- [ ] T012 [US1] Implement `FadeRegistry::apply` command dispatch in `src/engine/FadeRegistry.cpp` for commands consumed from the tick/drain path (at minimum `START_FADE` for this phase)
-- [ ] T013 [US1] Implement `GradientEngine::initialize`, `shutdown`, and private `onTick` in `src/engine/GradientEngine.cpp`: own `MtcTickSource`, `LockFreeQueue<FadeCommand, 64>`, `LockFreeQueue<StatusEmitRequest, 64>`, `FadeRegistry`, `NngBusClient`; register MTC callback; `onTick` acquires drain lock, drains command queue → `apply`, calls `tick`, releases lock (`specs/006-fade-registry-tick-loop/contracts/gradient-engine-api.md`, `specs/006-fade-registry-tick-loop/research.md` Decision 7)
-- [ ] T014 [US1] Integrate `gme::engine::GradientEngine` into `daemon/GradientEngineApplication.h` and `daemon/GradientEngineApplication.cpp`: build `GradientEngineConfig` from `daemon/config/ConfigurationManager`, call `initialize`/`shutdown` in application lifecycle, pass `FadeRegistry::apply` into `NngBusClient::start` drain callback
+- [x] T010 [US1] Implement `FadeRegistry::addFade` for `FadeCommand::Type::START_FADE` in `src/engine/FadeRegistry.cpp`: `CurveFactory::createCurve` on tick thread (FR-015), resolve `start_mtc_ms == -1` via `MtcTickSource::getMtcMs()` (FR-016), build `lo_address`, handle `START_CROSSFADE` by log-and-drop only (spec assumptions). **Note**: FR-014 supersede is implemented in T017 (US2); US1 demos MUST use unique OSC targets.
+- [x] T011 [US1] Implement `FadeRegistry::tick` core path in `src/engine/FadeRegistry.cpp`: `t` clamp + `duration_ms == 0 ⇒ t = 1.0` (contract), evaluate curve, `OscSender::sendFloat`, update `last_sent_value`, mark `completed` when `t >= 1.0`, send final `end_value`, remove completed entries from `fades_` and `osc_index_` — **defer** `FadeComplete` / `FadeError` queue pushes to User Story 2 (Phase 4) and **defer** OSC failure threshold handling to User Story 4 (Phase 6)
+- [x] T012 [US1] Implement `FadeRegistry::apply` command dispatch in `src/engine/FadeRegistry.cpp` for commands consumed from the tick/drain path (at minimum `START_FADE` for this phase)
+- [x] T013 [US1] Implement `GradientEngine::initialize`, `shutdown`, and private `onTick` in `src/engine/GradientEngine.cpp`: own `MtcTickSource`, `LockFreeQueue<FadeCommand, 64>`, `LockFreeQueue<StatusEmitRequest, 64>`, `FadeRegistry`, `NngBusClient`; register MTC callback; `onTick` acquires drain lock, drains command queue → `apply`, calls `tick`, releases lock (`specs/006-fade-registry-tick-loop/contracts/gradient-engine-api.md`, `specs/006-fade-registry-tick-loop/research.md` Decision 7)
+- [x] T014 [US1] Integrate `gme::engine::GradientEngine` into `daemon/GradientEngineApplication.h` and `daemon/GradientEngineApplication.cpp`: build `GradientEngineConfig` from `daemon/config/ConfigurationManager`, call `initialize`/`shutdown` in application lifecycle, pass `FadeRegistry::apply` into `NngBusClient::start` drain callback
 
 **Checkpoint**: US1 tests pass; daemon runs engine with live MTC + NNG ingress (status events not yet required for US1 OSC-only checks).
 
@@ -82,13 +82,13 @@ Single project: `src/`, `tests/`, `daemon/` at repository root (see plan.md).
 
 ### Tests for User Story 2
 
-- [ ] T015 [P] [US2] Extend `tests/test_fade_registry.cpp` to assert `FadeComplete` is pushed on completion and consumed by the status worker path (unit-level queue + mock or test hook), with a coarse timing assertion covering SC-003 (≤250 ms wall-clock from completion to emission)
-- [ ] T015b [P] [US2] Add a test in `tests/test_fade_registry.cpp` (or a new `tests/test_nng_status_queue.cpp`) that saturates the 64-slot SPSC status queue and asserts **drop-oldest** semantics with a warning-log side effect (FR-007, SC-002, SC-005)
+- [x] T015 [P] [US2] Extend `tests/test_fade_registry.cpp` to assert `FadeComplete` is pushed on completion and consumed by the status worker path (unit-level queue + mock or test hook), with a coarse timing assertion covering SC-003 (≤250 ms wall-clock from completion to emission)
+- [x] T015b [P] [US2] Add a test in `tests/test_fade_registry.cpp` (or a new `tests/test_nng_status_queue.cpp`) that saturates the 64-slot SPSC status queue and asserts **drop-oldest** semantics with a warning-log side effect (FR-007, SC-002, SC-005)
 
 ### Implementation for User Story 2
 
-- [ ] T016 [US2] In `src/engine/FadeRegistry.cpp`, enqueue **`FadeComplete`** on completion (FR-005); enqueue **`FadeError`** for `unknown_curve_type` and `osc_address_failed` from the tick thread via the status SPSC queue; invoke **direct** `statusDirect_` / `sendStatus` for supersede + the same errors when `addFade` runs from the **fallback drain** thread (`specs/006-fade-registry-tick-loop/research.md` Decision 1)
-- [ ] T017 [US2] Implement FR-014 supersede in `src/engine/FadeRegistry.cpp`: on duplicate OSC key `(host, port, path)`, remove prior fade **without final OSC**, emit `fade_error` / `superseded` for the old `fade_id`, register the new fade; mirror spec edge cases for duplicate `fade_id`
+- [x] T016 [US2] In `src/engine/FadeRegistry.cpp`, enqueue **`FadeComplete`** on completion (FR-005); enqueue **`FadeError`** for `unknown_curve_type` and `osc_address_failed` from the tick thread via the status SPSC queue; invoke **direct** `statusDirect_` / `sendStatus` for supersede + the same errors when `addFade` runs from the **fallback drain** thread (`specs/006-fade-registry-tick-loop/research.md` Decision 1)
+- [x] T017 [US2] Implement FR-014 supersede in `src/engine/FadeRegistry.cpp`: on duplicate OSC key `(host, port, path)`, remove prior fade **without final OSC**, emit `fade_error` / `superseded` for the old `fade_id`, register the new fade; mirror spec edge cases for duplicate `fade_id`
 
 **Checkpoint**: US1 + US2 acceptance paths covered; Controller can observe `fade_complete` over NNG.
 
@@ -102,11 +102,11 @@ Single project: `src/`, `tests/`, `daemon/` at repository root (see plan.md).
 
 ### Tests for User Story 3
 
-- [ ] T018 [P] [US3] Extend `tests/test_fade_registry.cpp` for cancel snap vs hold and `cancelAll()` (SC-005, SC-004)
+- [x] T018 [P] [US3] Extend `tests/test_fade_registry.cpp` for cancel snap vs hold and `cancelAll()` (SC-005, SC-004)
 
 ### Implementation for User Story 3
 
-- [ ] T019 [US3] Implement `FadeRegistry::cancelFade`, `FadeRegistry::cancelAll`, and `apply` branches for `CANCEL_FADE` / `CANCEL_ALL` in `src/engine/FadeRegistry.cpp` per `specs/006-fade-registry-tick-loop/contracts/fade-registry-api.md`
+- [x] T019 [US3] Implement `FadeRegistry::cancelFade`, `FadeRegistry::cancelAll`, and `apply` branches for `CANCEL_FADE` / `CANCEL_ALL` in `src/engine/FadeRegistry.cpp` per `specs/006-fade-registry-tick-loop/contracts/fade-registry-api.md`
 
 **Checkpoint**: Cancellation semantics stable for project stop / operator abort.
 
@@ -120,11 +120,11 @@ Single project: `src/`, `tests/`, `daemon/` at repository root (see plan.md).
 
 ### Tests for User Story 4
 
-- [ ] T020 [P] [US4] Extend `tests/test_fade_registry.cpp` for OSC failure threshold and recovery (SC-006)
+- [x] T020 [P] [US4] Extend `tests/test_fade_registry.cpp` for OSC failure threshold and recovery (SC-006)
 
 ### Implementation for User Story 4
 
-- [ ] T021 [US4] Extend `FadeRegistry::tick` in `src/engine/FadeRegistry.cpp` with `consecutive_osc_failures` accounting: increment on non-zero `sendFloat` return, reset on success, enqueue `osc_send_failed` and remove fade at threshold
+- [x] T021 [US4] Extend `FadeRegistry::tick` in `src/engine/FadeRegistry.cpp` with `consecutive_osc_failures` accounting: increment on non-zero `sendFloat` return, reset on success, enqueue `osc_send_failed` and remove fade at threshold
 
 **Checkpoint**: Failed players surface as `fade_error` instead of hanging the cue lifecycle.
 
@@ -138,11 +138,11 @@ Single project: `src/`, `tests/`, `daemon/` at repository root (see plan.md).
 
 ### Tests for User Story 5
 
-- [ ] T022 [P] [US5] Extend `tests/test_fade_registry.cpp` with: (a) a test that calls `tick(mtc_ms)` zero times across a synthetic pause interval and asserts zero OSC sends; (b) a resume test asserting the first post-pause `tick(T)` matches `curve.evaluate(clamp((T - start_mtc_ms) / duration_ms))`; (c) a rewind-before-start test asserting the OSC value equals `start_value` (spec User Story 5 scenarios 1–3)
+- [x] T022 [P] [US5] Extend `tests/test_fade_registry.cpp` with: (a) a test that calls `tick(mtc_ms)` zero times across a synthetic pause interval and asserts zero OSC sends; (b) a resume test asserting the first post-pause `tick(T)` matches `curve.evaluate(clamp((T - start_mtc_ms) / duration_ms))`; (c) a rewind-before-start test asserting the OSC value equals `start_value` (spec User Story 5 scenarios 1–3)
 
 ### Implementation for User Story 5
 
-- [ ] T023 [US5] Confirm via the T022 tests that no extra guard is needed in `src/engine/GradientEngine.cpp` or `src/time/MtcTickSource.cpp` (quarter-frame callback only fires on MTC advance). If a guard proves necessary, add it and document the rationale in `src/engine/GradientEngine.h`.
+- [x] T023 [US5] Confirm via the T022 tests that no extra guard is needed in `src/engine/GradientEngine.cpp` or `src/time/MtcTickSource.cpp` (quarter-frame callback only fires on MTC advance). If a guard proves necessary, add it and document the rationale in `src/engine/GradientEngine.h`.
 
 **Checkpoint**: Rehearsal-time transport behaviour matches spec.
 
@@ -152,10 +152,10 @@ Single project: `src/`, `tests/`, `daemon/` at repository root (see plan.md).
 
 **Purpose**: Performance gate, documentation, quickstart validation.
 
-- [ ] T024 [P] Implement `tests/test_fade_registry_bench.cpp` for SC-007 (50 concurrent fades, 200 Hz tick, p99 tick duration ≤ 2 ms wall-clock, loopback OSC)
-- [ ] T025 [P] Add Doxygen-compatible docstrings (brief + params + errors + compiling example, per Constitution Principle VI; verified by `cmake --build build --target docs` with Doxygen `WARN_AS_ERROR=YES`) to `src/engine/ActiveFade.h`, `src/engine/FadeRegistry.h`, `src/engine/GradientEngine.h`, `src/osc/OscSender.h`, `src/signal/StatusEmitRequest.h`
-- [ ] T026 Update `daemon/comms/NngBusClient.h` file-level and public API comments for the status worker + SPSC queue semantics
-- [ ] T027 Run `specs/006-fade-registry-tick-loop/quickstart.md` validation (`ctest -R test_fade_registry`, unit + integration labels) and fix any gaps
+- [x] T024 [P] Implement `tests/test_fade_registry_bench.cpp` for SC-007 (50 concurrent fades, 200 Hz tick, p99 tick duration ≤ 2 ms wall-clock, loopback OSC)
+- [x] T025 [P] Add Doxygen-compatible docstrings (brief + params + errors + compiling example, per Constitution Principle VI; verified by `cmake --build build --target docs` with Doxygen `WARN_AS_ERROR=YES`) to `src/engine/ActiveFade.h`, `src/engine/FadeRegistry.h`, `src/engine/GradientEngine.h`, `src/osc/OscSender.h`, `src/signal/StatusEmitRequest.h`
+- [x] T026 Update `daemon/comms/NngBusClient.h` file-level and public API comments for the status worker + SPSC queue semantics
+- [x] T027 Run `specs/006-fade-registry-tick-loop/quickstart.md` validation (`ctest -R test_fade_registry`, unit + integration labels) and fix any gaps
 
 ---
 
@@ -251,4 +251,4 @@ Task T021: "Extend FadeRegistry::tick in src/engine/FadeRegistry.cpp …"
 
 ## Format Validation
 
-All tasks use the required checklist pattern: `- [ ] Tnnn [optional P] [optional USn] Description with file path`.
+All tasks use the required checklist pattern: `- [x] Tnnn [optional P] [optional USn] Description with file path`.

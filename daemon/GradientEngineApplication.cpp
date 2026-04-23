@@ -5,6 +5,7 @@
 
 #include "GradientEngineApplication.h"
 #include "config/ConfigurationManager.h"
+#include "engine/GradientEngine.h"
 #include "logging.h"
 
 #include <csignal>
@@ -34,6 +35,7 @@ GradientEngineApplication::GradientEngineApplication()
     , initialized_(false)
     , shutdownComplete_(false)
     , config_(std::make_unique<ConfigurationManager>())
+    , engine_(std::make_unique<gme::engine::GradientEngine>())
 #ifdef HAVE_CUEMS_LOGGER
     , logger_(nullptr)
 #endif
@@ -66,8 +68,21 @@ int GradientEngineApplication::initialize(int argc, char** argv) {
     // Log startup information
     GME_LOG_INFO("gradient-motiond starting");
     GME_LOG_INFO("  MIDI port : " + config_->getMidiPort());
+    GME_LOG_INFO("  NNG URL   : " + config_->getNngUrl());
+    GME_LOG_INFO("  Node name : " + config_->getNodeName());
     GME_LOG_INFO("  Log level : " + config_->getLogLevel());
     GME_LOG_INFO("  Conf path : " + config_->getConfPath());
+
+    // Initialize GradientEngine (opens MIDI port and NNG socket)
+    gme::engine::GradientEngineConfig engCfg;
+    engCfg.midiPort = config_->getMidiPort();
+    engCfg.nngUrl   = config_->getNngUrl();
+    engCfg.nodeName = config_->getNodeName();
+
+    if (!engine_->initialize(engCfg)) {
+        GME_LOG_ERROR("gradient-motiond: GradientEngine initialization failed");
+        return 1;
+    }
 
     // Install signal handlers
     installSignalHandlers();
@@ -94,6 +109,12 @@ void GradientEngineApplication::shutdown() {
     if (shutdownComplete_) return;
 
     GME_LOG_INFO("gradient-motiond shutting down");
+
+    // Gracefully stop the engine (cancels fades, joins NNG threads)
+    if (engine_) {
+        engine_->shutdown();
+        engine_.reset();
+    }
 
     config_.reset();
 

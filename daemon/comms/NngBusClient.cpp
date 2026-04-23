@@ -66,8 +66,9 @@ StartError NngBusClient::start(const std::string& url,
     }
 
     running_.store(true);
-    recvThread_     = std::thread(&NngBusClient::recvLoop, this);
-    fallbackThread_ = std::thread(&NngBusClient::fallbackDrainLoop, this);
+    recvThread_          = std::thread(&NngBusClient::recvLoop, this);
+    fallbackThread_      = std::thread(&NngBusClient::fallbackDrainLoop, this);
+    statusWorkerThread_  = std::thread(&NngBusClient::statusWorkerLoop, this);
 
     GME_LOG_INFO("NngBusClient: started, url=" + url + ", sender=" + senderId_);
     return StartError::Ok;
@@ -76,10 +77,14 @@ StartError NngBusClient::start(const std::string& url,
 void NngBusClient::stop() {
     if (!running_.exchange(false)) return;
 
-    // Wake fallback drain thread
+    // Wake fallback drain thread and status worker
     {
         std::lock_guard<std::mutex> lk(drainCv_mutex_);
         drainCv_.notify_all();
+    }
+    {
+        std::lock_guard<std::mutex> lk(statusWorkerCv_mutex_);
+        statusWorkerCv_.notify_all();
     }
 
     // Close socket — unblocks any in-flight nng_recv
@@ -89,8 +94,9 @@ void NngBusClient::stop() {
         sock_ = nullptr;
     }
 
-    if (recvThread_.joinable())     recvThread_.join();
-    if (fallbackThread_.joinable()) fallbackThread_.join();
+    if (recvThread_.joinable())          recvThread_.join();
+    if (fallbackThread_.joinable())      fallbackThread_.join();
+    if (statusWorkerThread_.joinable())  statusWorkerThread_.join();
 
     connected_.store(false);
     GME_LOG_INFO("NngBusClient: stopped");
@@ -229,7 +235,49 @@ void NngBusClient::sendStatus(StatusKind kind,
 }
 
 // ---------------------------------------------------------------------------
-// isConnected (T017)
+// pushStatus — non-blocking, safe from MTC tick thread (FR-006b)
+// ---------------------------------------------------------------------------
+
+void NngBusClient::pushStatus(gme::signal::StatusEmitRequest&& req) {
+    if (!statusQueue_.push(std::move(req))) {
+        GME_LOG_WARNING("NngBusClient: status queue overflow — oldest status dropped");
+    }
+    // Wake the status worker so it drains promptly (best-effort, non-blocking).
+    // Use try_lock to avoid blocking the tick thread if the mutex is contended.
+    if (statusWorkerCv_mutex_.try_lock()) {
+        statusWorkerCv_.notify_one();
+        statusWorkerCv_mutex_.unlock();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// statusWorkerLoop — pops StatusEmitRequests and calls sendStatus
+// ---------------------------------------------------------------------------
+
+void NngBusClient::statusWorkerLoop() {
+    while (running_.load()) {
+        std::unique_lock<std::mutex> lk(statusWorkerCv_mutex_);
+        // Wait up to 50 ms so we still drain promptly even without a notify
+        statusWorkerCv_.wait_for(lk, std::chrono::milliseconds(50));
+        lk.unlock();
+
+        if (!running_.load()) break;
+
+        gme::signal::StatusEmitRequest req;
+        while (statusQueue_.pop(req)) {
+            sendStatus(req.kind, req.fade_id, req.reason);
+        }
+    }
+
+    // Drain any residual status requests before exiting
+    gme::signal::StatusEmitRequest req;
+    while (statusQueue_.pop(req)) {
+        sendStatus(req.kind, req.fade_id, req.reason);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// isConnected
 // ---------------------------------------------------------------------------
 
 bool NngBusClient::isConnected() const noexcept {
