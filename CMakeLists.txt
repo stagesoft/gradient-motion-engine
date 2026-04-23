@@ -25,10 +25,9 @@ find_package(PkgConfig REQUIRED)
 if(BUILD_DAEMON)
     # Required for daemon: RtMidi (needed by mtcreceiver)
     pkg_check_modules(RTMIDI REQUIRED rtmidi)
+    find_package(nng REQUIRED)
 endif()
 
-# Optional in Phase 0 — checked for availability, not linked yet
-pkg_check_modules(NNG nng)
 pkg_check_modules(TINYXML2 tinyxml2)
 pkg_check_modules(LIBLO liblo)
 
@@ -113,6 +112,7 @@ if(BUILD_DAEMON)
         daemon/main.cpp
         daemon/GradientEngineApplication.cpp
         daemon/config/ConfigurationManager.cpp
+        daemon/comms/NngBusClient.cpp
     )
 
     target_include_directories(gradient-motiond PRIVATE
@@ -123,6 +123,7 @@ if(BUILD_DAEMON)
         gradient_motion
         mtcreceiver
         ${RTMIDI_LIBRARIES}
+        nng::nng
         pthread
     )
 

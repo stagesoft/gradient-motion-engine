@@ -12,6 +12,7 @@
  * | --midi-port    | -m    | string | "Midi Through Port-0"|
  * | --log-level    | -l    | string | "info"               |
  * | --conf-path    | -c    | string | "/etc/cuems"         |
+ * | --node-name    | -n    | string | hostname             |
  * | --help         | -h    | flag   | —                    |
  * | --version      | -V    | flag   | —                    |
  *
@@ -35,7 +36,9 @@
 #ifndef GRADIENT_ENGINE_CONFIGURATION_MANAGER_H
 #define GRADIENT_ENGINE_CONFIGURATION_MANAGER_H
 
+#include <climits>
 #include <string>
+#include <unistd.h>
 
 /**
  * @brief Stores and validates daemon configuration from CLI arguments.
@@ -85,10 +88,14 @@ public:
     /** @brief Get the configured CUEMS configuration directory path. */
     const std::string& getConfPath() const { return confPath_; }
 
+    /** @brief Get the node name (from --node-name or hostname default). */
+    const std::string& getNodeName() const { return nodeName_; }
+
 private:
     std::string midiPort_;
     std::string logLevel_;
     std::string confPath_;
+    std::string nodeName_;
 
     /**
      * @brief Print usage information to stdout.

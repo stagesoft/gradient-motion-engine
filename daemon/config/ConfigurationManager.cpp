@@ -9,6 +9,8 @@
 #include <iostream>
 #include <algorithm>
 #include <vector>
+#include <climits>
+#include <unistd.h>
 
 // Version string — update per release
 static const char* VERSION_STRING = "gradient-motiond 0.1.0 (Phase 0)";
@@ -22,24 +24,26 @@ ConfigurationManager::ConfigurationManager()
     : midiPort_("Midi Through Port-0")
     , logLevel_("info")
     , confPath_("/etc/cuems")
+    , nodeName_("")
 {
 }
 
 int ConfigurationManager::parseArgs(int argc, char** argv) {
     static struct option longOptions[] = {
-        {"midi-port", required_argument, nullptr, 'm'},
-        {"log-level", required_argument, nullptr, 'l'},
-        {"conf-path", required_argument, nullptr, 'c'},
-        {"help",      no_argument,       nullptr, 'h'},
-        {"version",   no_argument,       nullptr, 'V'},
-        {nullptr,     0,                 nullptr,  0 }
+        {"midi-port",  required_argument, nullptr, 'm'},
+        {"log-level",  required_argument, nullptr, 'l'},
+        {"conf-path",  required_argument, nullptr, 'c'},
+        {"node-name",  required_argument, nullptr, 'n'},
+        {"help",       no_argument,       nullptr, 'h'},
+        {"version",    no_argument,       nullptr, 'V'},
+        {nullptr,      0,                 nullptr,  0 }
     };
 
     // Reset getopt state for repeated calls (e.g. testing)
     optind = 1;
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "m:l:c:hV", longOptions, nullptr)) != -1) {
+    while ((opt = getopt_long(argc, argv, "m:l:c:n:hV", longOptions, nullptr)) != -1) {
         switch (opt) {
             case 'm':
                 midiPort_ = optarg;
@@ -49,6 +53,9 @@ int ConfigurationManager::parseArgs(int argc, char** argv) {
                 break;
             case 'c':
                 confPath_ = optarg;
+                break;
+            case 'n':
+                nodeName_ = optarg;
                 break;
             case 'h':
                 printUsage();
@@ -69,6 +76,17 @@ int ConfigurationManager::parseArgs(int argc, char** argv) {
         return 1;
     }
 
+    if (nodeName_.empty()) {
+        char buf[HOST_NAME_MAX + 1];
+        if (gethostname(buf, sizeof(buf)) != 0) {
+            std::cerr << "Error: could not determine hostname for --node-name default" << std::endl;
+            return 1;
+        }
+        buf[HOST_NAME_MAX] = '\0';
+        nodeName_ = buf;
+        std::cerr << "node_name defaulted to hostname: " << nodeName_ << std::endl;
+    }
+
     return 0;
 }
 
@@ -84,6 +102,8 @@ void ConfigurationManager::printUsage() const {
         << "                           (default: info)\n"
         << "  -c, --conf-path <path>   Path to CUEMS configuration directory\n"
         << "                           (default: /etc/cuems)\n"
+        << "  -n, --node-name <name>   Node name for NNG bus filtering\n"
+        << "                           (default: system hostname)\n"
         << "  -h, --help               Print this help message and exit\n"
         << "  -V, --version            Print version information and exit\n";
 }

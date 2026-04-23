@@ -7,6 +7,7 @@ set(GME_SOURCES
     gradient/ResampledCurve.cpp
     gradient/CurveFactory.cpp
     signal/signal.cpp
+    signal/FadeCommand.cpp
     osc/osc.cpp
     engine/engine.cpp
 )
