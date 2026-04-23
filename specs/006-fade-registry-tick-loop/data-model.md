@@ -126,15 +126,17 @@ Top-level orchestrator. Owns `MtcTickSource`, `NngBusClient`, `LockFreeQueue`, `
 
 ---
 
-### `StatusEmitRequest` (inline in `NngBusClient.h` or `FadeRegistry.h`)
+### `StatusEmitRequest` (`src/signal/StatusEmitRequest.h`)
 
-Tuple pushed by the tick thread onto the status worker queue.
+Tuple pushed by the tick thread onto the status worker queue. Defined in `src/signal/StatusEmitRequest.h` so `libgradient_motion` (which produces these tuples inside `FadeRegistry`) never needs to include any daemon header.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `kind` | `StatusKind` | `FadeComplete` or `FadeError`. |
+| `kind` | `gme::signal::StatusKind` | `FadeComplete` or `FadeError`. |
 | `fade_id` | `std::string` | Fade identifier (from `ActiveFade::fade_id`). |
 | `reason` | `std::string` | Error reason string. Empty for `FadeComplete`. |
+
+**`StatusKind` location**: `StatusKind` is declared in `src/signal/StatusEmitRequest.h` (namespace `gme::signal`). `daemon/comms/NngBusClient.h` keeps a `using StatusKind = gme::signal::StatusKind;` alias so existing daemon call sites (`NngBusClient::sendStatus(StatusKind, …)`) compile unchanged. This satisfies Constitution Principle III (library-first): `libgradient_motion` must not depend on `daemon/` headers.
 
 **Note on allocation**: `std::string` copies in the status push are not in the steady-state per-frame tick path — they occur only on fade completion or error events (non-recurring). Acceptable per Principle IV (steady-state evaluation frames have no allocation; completion/error is an exceptional exit from the fade lifecycle).
 
