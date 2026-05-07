@@ -173,4 +173,12 @@ if(BUILD_DAEMON)
         target_compile_definitions(gradient-motiond PRIVATE HAVE_CUEMS_LOGGER)
         target_link_libraries(gradient-motiond PRIVATE cuemslogger)
     endif()
+
+    # Install rules — places the daemon at <prefix>/bin/gradient-motiond.
+    # debian/rules sets CMAKE_INSTALL_PREFIX=/usr so the .deb ships
+    # /usr/bin/gradient-motiond, matching the path that
+    # cuems-common's cuems-gradient-motiond.service ExecStart= expects.
+    include(GNUInstallDirs)
+    install(TARGETS gradient-motiond
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
