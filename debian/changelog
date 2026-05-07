@@ -1,0 +1,9 @@
+cuems-gradient-motiond (0.2.0-1) unstable; urgency=medium
+
+  * Initial Debian package release (Phase 5 — Application + systemd).
+  * Ships /usr/bin/gradient-motiond.
+  * Depends on cuems-common (which provides the systemd unit
+    cuems-gradient-motiond.service).
+  * Built from feat/phase5-systemd-packaging branch on top of v0.1.0.
+
+ -- Ion Reguera <ion@stagelab.coop>  Thu, 07 May 2026 12:28:17 +0200

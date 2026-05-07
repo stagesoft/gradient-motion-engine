@@ -1,0 +1,40 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: gradient-motion-engine
+Upstream-Contact: Stagelab Coop SCCL <team@cuems.org>
+Source: https://github.com/stagesoft/gradient-motion-engine
+
+Files: *
+Copyright: 2026 Stagelab Coop SCCL
+License: GPL-3.0-or-later
+Comment: Primary author: Adrià Masip <adria.back@gmail.com>
+ (Phases 0-4: scaffold, gradient module, MTC tick source, NNG bus client,
+ fade registry + tick loop). Phase 5 packaging contributions by
+ Ion Reguera <ion@stagelab.coop>.
+
+Files: debian/*
+Copyright: 2026 Stagelab Coop SCCL
+License: GPL-3.0-or-later
+Comment: Phase 5 Debian packaging by Ion Reguera <ion@stagelab.coop>.
+
+Files: mtcreceiver/*
+Copyright: 2024-2026 Stagelab Coop SCCL
+License: GPL-3.0-or-later
+Comment: Bundled as a git submodule. See mtcreceiver/LICENSE for upstream
+ author and copyright details.
+
+License: GPL-3.0-or-later
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ .
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ .
+ You should have received a copy of the GNU General Public License
+ along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ .
+ On Debian systems, the complete text of the GNU General Public
+ License version 3 can be found in "/usr/share/common-licenses/GPL-3".
