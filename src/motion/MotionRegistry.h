@@ -19,18 +19,14 @@
  *
  * All public methods must be called from a **single thread at a time** —
  * either the MTC tick callback thread or the 100 ms fallback drain thread,
- * serialised externally via `NngBusClient::drain_in_progress_`.
+ * serialised externally by the caller.
  * No internal mutex is required.
  *
  * ## Status emission model
  *
- *  - **Tick thread context** (completion, osc_send_failed): push onto the
- *    SPSC `statusQueue_` reference.
- *  - **Drain thread context** (supersede, duplicate_motion_id,
- *    construction errors from MotionFactory): call `statusDirect_` directly.
- *
- * The caller sets `tickThreadContext_` via `setTickThreadContext` before
- * calling `apply` + `tick`, and clears it after.
+ * All status events (completion, errors, supersede, duplicate) are delivered
+ * synchronously through the `statusDirect_` callback supplied at construction.
+ * The callback must be non-blocking and safe to call from any thread context.
  *
  * ## addMotion ordered checks
  *
@@ -52,7 +48,6 @@
 #include "motion/IMotion.h"
 #include "signal/FadeCommand.h"
 #include "signal/LockFreeQueue.h"
-#include "signal/StatusEmitRequest.h"
 #include "time/MtcTickSource.h"
 
 #include <functional>
@@ -85,9 +80,6 @@ public:
      */
     static constexpr int kOscFailureThreshold = 5;
 
-    /** @brief Capacity of the SPSC status queue (matches inbound queue). */
-    static constexpr std::size_t kStatusQueueCapacity = 64;
-
     // -----------------------------------------------------------------------
     // Injectable OSC send function type (for test injection via MotionFactory)
     // -----------------------------------------------------------------------
@@ -110,23 +102,19 @@ public:
      * @param mtcSource     Reference to the `MtcTickSource` used to resolve
      *                      `FadeCommand::start_mtc_ms == -1` (FR-016).
      *                      Must outlive the registry.
-     * @param statusQueue   Reference to the SPSC status queue owned by the
-     *                      engine. Tick-thread pushes use this path.
-     *                      Must outlive the registry.
-     * @param statusDirect  Callback for direct status emission from the
-     *                      fallback drain thread context.
+     * @param statusDirect  Callback for status emission. Called synchronously
+     *                      on any status event (completion, error, supersede,
+     *                      duplicate). Must be non-blocking.
      * @param oscSend       Optional OSC send override (default: `sendFloat`).
      *                      Forwarded to `MotionFactory` at `START_FADE` time.
      *
      * @par Example:
      * @code
-     *   gme::signal::LockFreeQueue<gme::signal::StatusEmitRequest, 64> sq;
-     *   MotionRegistry reg(tickSrc, sq,
-     *       [&](auto k, auto& id, auto& r){ client.sendStatus(k, id, r); });
+     *   MotionRegistry reg(tickSrc,
+     *       [](auto k, auto& id, auto& r){ log(k, id, r); });
      * @endcode
      */
     MotionRegistry(const gme::time::MtcTickSource& mtcSource,
-                   gme::signal::LockFreeQueue<gme::signal::StatusEmitRequest, 64>& statusQueue,
                    std::function<void(gme::signal::StatusKind,
                                      const std::string&,
                                      const std::string&)> statusDirect,
@@ -204,9 +192,9 @@ public:
      * For each `IMotion`:
      *  1. Calls `m->evalAndSend(mtc_ms)`.
      *  2. On `result.failed`: increments `m->consecutive_osc_failures`; if ≥
-     *     `kOscFailureThreshold`, pushes `MotionError:"osc_send_failed"` and
+     *     `kOscFailureThreshold`, emits `MotionError:"osc_send_failed"` and
      *     marks for removal. Otherwise resets the counter to 0.
-     *  3. On `result.completed`: marks `m->completed = true`, pushes
+     *  3. On `result.completed`: marks `m->completed = true`, emits
      *     `MotionComplete`, marks for removal.
      *
      * After iterating, removes all marked motions from both maps.
@@ -224,9 +212,6 @@ public:
     /** @brief Return the number of currently active motions. */
     std::size_t size() const noexcept { return motions_.size(); }
 
-    /** @brief Called by GradientEngine::onTick before draining + ticking. */
-    void setTickThreadContext(bool v) noexcept { tickThreadContext_ = v; }
-
 private:
     // -----------------------------------------------------------------------
     // Internal helpers
@@ -235,17 +220,7 @@ private:
     /** Remove a motion by id from both maps (destructor frees transport handle). */
     void removeMotion(const std::string& motion_id);
 
-    /** Emit a status from the tick thread context (uses statusQueue_). */
-    void pushStatusFromTick(gme::signal::StatusKind kind,
-                            const std::string& motion_id,
-                            const std::string& reason);
-
-    /** Emit a status from the drain thread context (calls statusDirect_). */
-    void emitStatusDirect(gme::signal::StatusKind kind,
-                          const std::string& motion_id,
-                          const std::string& reason);
-
-    /** Route status emission to the correct path based on tickThreadContext_. */
+    /** Emit a status event through statusDirect_. */
     void emitStatus(gme::signal::StatusKind kind,
                     const std::string& motion_id,
                     const std::string& reason);
@@ -256,8 +231,6 @@ private:
 
     const gme::time::MtcTickSource& mtcSource_;
 
-    gme::signal::LockFreeQueue<gme::signal::StatusEmitRequest, 64>& statusQueue_;
-
     std::function<void(gme::signal::StatusKind,
                        const std::string&,
                        const std::string&)> statusDirect_;
@@ -266,9 +239,6 @@ private:
 
     /**
      * @brief Primary index: motion_id → IMotion.
-     *
-     * Pointer-stable after insertion (`unordered_map` guarantee), required
-     * for future crossfade partner raw-pointer pairing.
      */
     std::unordered_map<std::string, std::unique_ptr<IMotion>> motions_;
 
@@ -279,8 +249,6 @@ private:
      * Never touched during `tick()`.
      */
     std::unordered_map<std::string, std::string> osc_index_;
-
-    bool tickThreadContext_ = false;
 };
 
 } // namespace motion

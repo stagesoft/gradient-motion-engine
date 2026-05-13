@@ -10,6 +10,7 @@ set(GME_SOURCES
     gradient/ResampledCurve.cpp
     gradient/CurveFactory.cpp
     signal/FadeCommand.cpp
+    signal/parseFadeOscCommand.cpp
     osc/OscSender.cpp
     motion/MotionRegistry.cpp
     motion/FadeMotion.cpp

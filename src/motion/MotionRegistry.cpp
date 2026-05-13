@@ -27,13 +27,11 @@ namespace motion {
 
 MotionRegistry::MotionRegistry(
     const gme::time::MtcTickSource& mtcSource,
-    gme::signal::LockFreeQueue<gme::signal::StatusEmitRequest, 64>& statusQueue,
     std::function<void(gme::signal::StatusKind,
                        const std::string&,
                        const std::string&)> statusDirect,
     OscSendFn oscSend)
     : mtcSource_(mtcSource)
-    , statusQueue_(statusQueue)
     , statusDirect_(std::move(statusDirect))
     , oscSend_(std::move(oscSend))
 {}
@@ -55,34 +53,11 @@ void MotionRegistry::removeMotion(const std::string& motion_id) {
     motions_.erase(it);
 }
 
-void MotionRegistry::pushStatusFromTick(gme::signal::StatusKind kind,
-                                         const std::string& motion_id,
-                                         const std::string& reason) {
-    gme::signal::StatusEmitRequest req;
-    req.kind    = kind;
-    req.fade_id = motion_id;
-    req.reason  = reason;
-    if (!statusQueue_.push(std::move(req))) {
-        std::fprintf(stderr, "WARNING MotionRegistry: status queue overflow, "
-                     "oldest dropped (motion_id=%s)\n", motion_id.c_str());
-    }
-}
-
-void MotionRegistry::emitStatusDirect(gme::signal::StatusKind kind,
-                                       const std::string& motion_id,
-                                       const std::string& reason) {
+void MotionRegistry::emitStatus(gme::signal::StatusKind kind,
+                                const std::string& motion_id,
+                                const std::string& reason) {
     if (statusDirect_) {
         statusDirect_(kind, motion_id, reason);
-    }
-}
-
-void MotionRegistry::emitStatus(gme::signal::StatusKind kind,
-                                 const std::string& motion_id,
-                                 const std::string& reason) {
-    if (tickThreadContext_) {
-        pushStatusFromTick(kind, motion_id, reason);
-    } else {
-        emitStatusDirect(kind, motion_id, reason);
     }
 }
 
@@ -108,15 +83,15 @@ void MotionRegistry::apply(gme::signal::FadeCommand& cmd) {
             break;
         }
         case Type::CANCEL_MOTION:
-            cancelMotion(cmd.fade_id, /*snap_to_end=*/false);
+            cancelMotion(cmd.motion_id, /*snap_to_end=*/false);
             break;
         case Type::CANCEL_ALL:
             cancelAll();
             break;
         case Type::START_CROSSFADE:
             std::fprintf(stderr, "INFO MotionRegistry: START_CROSSFADE dropped "
-                         "(deferred to Phase 7, motion_id=%s)\n",
-                         cmd.fade_id.c_str());
+                         "(deferred to future feature, motion_id=%s)\n",
+                         cmd.motion_id.c_str());
             break;
     }
 }
@@ -130,7 +105,6 @@ void MotionRegistry::addMotion(std::unique_ptr<IMotion> m) {
     if (motions_.count(m->motion_id)) {
         emitStatus(gme::signal::StatusKind::MotionError,
                    m->motion_id, "duplicate_motion_id");
-        // m destructs here, freeing its transport handle + curve
         return;
     }
 
@@ -202,8 +176,8 @@ void MotionRegistry::tick(long mtc_ms) {
                 const char* reason = r.failure_reason
                                      ? r.failure_reason
                                      : "osc_send_failed";
-                pushStatusFromTick(gme::signal::StatusKind::MotionError,
-                                   m.motion_id, reason);
+                emitStatus(gme::signal::StatusKind::MotionError,
+                           m.motion_id, reason);
                 to_remove.push_back(m.motion_id);
                 continue;
             }
@@ -213,8 +187,7 @@ void MotionRegistry::tick(long mtc_ms) {
 
         if (r.completed) {
             m.completed = true;
-            pushStatusFromTick(gme::signal::StatusKind::MotionComplete,
-                               m.motion_id, "");
+            emitStatus(gme::signal::StatusKind::MotionComplete, m.motion_id, "");
             to_remove.push_back(m.motion_id);
         }
     }

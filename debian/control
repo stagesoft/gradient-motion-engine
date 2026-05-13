@@ -6,7 +6,6 @@ Uploaders: Ion Reguera <ion@stagelab.coop>
 Build-Depends: debhelper-compat (= 13),
                cmake (>= 3.16),
                pkg-config,
-               libnng-dev,
                librtmidi-dev,
                liblo-dev,
                nlohmann-json3-dev,
@@ -23,8 +22,8 @@ Depends: ${shlibs:Depends},
          cuems-common
 Description: CUEMS Gradient Motion Engine (fade-engine daemon)
  gradient-motiond drives parametric volume/opacity envelopes for the CUEMS
- cue playback system. Receives start_fade/cancel_motion/cancel_all/start_crossfade
- commands over an NNG bus from the CUEMS controller engine, evaluates the
+ cue playback system. Receives start_fade/cancel_motion/cancel_all commands
+ over localhost UDP OSC from the local NodeEngine, evaluates the
  sigmoidal/linear/exponential/logarithmic curves locked to MIDI Time Code,
  and emits OSC value updates to audio (cuems-audioplayer /volmaster) and
  video (cuems-videocomposer /videocomposer/layer/{id}/opacity) players.

@@ -35,21 +35,6 @@ target_compile_definitions(test_mtc_tick_source PRIVATE MTCRECV_TESTING)
 add_test(NAME test_mtc_tick_source COMMAND test_mtc_tick_source)
 set_tests_properties(test_mtc_tick_source PROPERTIES LABELS "unit")
 
-# ── NNG parse tests (no sockets) ─────────────────────────────────────────────
-add_executable(test_nng_parse test_nng_parse.cpp)
-
-target_include_directories(test_nng_parse PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}
-)
-
-target_link_libraries(test_nng_parse PRIVATE
-    gradient_motion
-)
-
-add_test(NAME test_nng_parse COMMAND test_nng_parse)
-set_tests_properties(test_nng_parse PROPERTIES LABELS "unit")
-
 # ── LockFreeQueue tests ───────────────────────────────────────────────────────
 add_executable(test_lockfree_queue test_lockfree_queue.cpp)
 
@@ -65,29 +50,22 @@ target_link_libraries(test_lockfree_queue PRIVATE
 add_test(NAME test_lockfree_queue COMMAND test_lockfree_queue)
 set_tests_properties(test_lockfree_queue PROPERTIES LABELS "unit")
 
-# ── NNG integration test (real loopback, opt-in) ──────────────────────────────
-if(BUILD_DAEMON)
-    add_executable(test_nng_integration
-        test_nng_integration.cpp
-        ${CMAKE_SOURCE_DIR}/daemon/comms/NngBusClient.cpp
-    )
+# ── OSC parser unit tests (no network, no MIDI) ──────────────────────────────
+if(LIBLO_FOUND)
+    add_executable(test_osc_parse test_osc_parse.cpp)
 
-    target_include_directories(test_nng_integration PRIVATE
+    target_include_directories(test_osc_parse PRIVATE
         ${CMAKE_SOURCE_DIR}/src
         ${CMAKE_SOURCE_DIR}
-        ${CMAKE_SOURCE_DIR}/daemon
     )
 
-    target_link_libraries(test_nng_integration PRIVATE
+    target_link_libraries(test_osc_parse PRIVATE
         gradient_motion
-        nng::nng
-        pthread
+        ${LIBLO_LIBRARIES}
     )
 
-    target_compile_definitions(test_nng_integration PRIVATE GME_ENABLE_INTEGRATION_TESTS)
-
-    add_test(NAME test_nng_integration COMMAND test_nng_integration)
-    set_tests_properties(test_nng_integration PROPERTIES LABELS "integration")
+    add_test(NAME test_osc_parse COMMAND test_osc_parse)
+    set_tests_properties(test_osc_parse PROPERTIES LABELS "unit")
 endif()
 
 # ── FadeMotion behavioural regression tests (ported from test_fade_registry) ──
@@ -132,6 +110,52 @@ if(BUILD_DAEMON AND LIBLO_FOUND)
 
     add_test(NAME test_motion_registry COMMAND test_motion_registry)
     set_tests_properties(test_motion_registry PROPERTIES LABELS "unit")
+
+    # ── OscServer integration test (real loopback, opt-in) ──────────────────
+    add_executable(test_osc_server_integration
+        test_osc_server_integration.cpp
+        ${CMAKE_SOURCE_DIR}/daemon/comms/OscServer.cpp
+    )
+
+    target_include_directories(test_osc_server_integration PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/daemon
+    )
+
+    target_link_libraries(test_osc_server_integration PRIVATE
+        gradient_motion
+        ${LIBLO_LIBRARIES}
+        pthread
+    )
+
+    add_test(NAME test_osc_server_integration COMMAND test_osc_server_integration)
+    set_tests_properties(test_osc_server_integration PROPERTIES LABELS "integration")
+
+    # ── OSC latency benchmark (spec SC-002) ─────────────────────────────────
+    add_executable(bench_osc_latency
+        bench_osc_latency.cpp
+        ${CMAKE_SOURCE_DIR}/daemon/comms/OscServer.cpp
+    )
+
+    target_include_directories(bench_osc_latency PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/daemon
+    )
+
+    target_link_libraries(bench_osc_latency PRIVATE
+        gradient_motion
+        ${LIBLO_LIBRARIES}
+        pthread
+    )
+
+    target_compile_definitions(bench_osc_latency PRIVATE
+        BENCH_RESULTS_FILE="${CMAKE_SOURCE_DIR}/tests/bench_results/osc_latency.txt"
+    )
+
+    add_test(NAME bench_osc_latency COMMAND bench_osc_latency)
+    set_tests_properties(bench_osc_latency PROPERTIES LABELS "bench")
 
     # ── OSC loopback benchmark (SC-007) ──────────────────────────────────────
     add_executable(test_motion_registry_bench test_motion_registry_bench.cpp)

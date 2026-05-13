@@ -1,0 +1,36 @@
+T052 — OSC Send-Failure Rate-Limit Check
+Date: dimecres, 13 de maig de 2026, 17:53:01 CEST
+Port: 17101  Node: rate-limit-node  Closed-CB-Port: 19999
+
+NOTE: Full kOscFailureThreshold=5 eviction test requires MTC ticks (node-002).
+      This script verifies the acceptance path and crash-free behaviour.
+
+--- Prerequisites ---
+PASS: daemon binary exists
+PASS: osc_sender built
+
+--- Start daemon ---
+Daemon PID: 228635
+PASS: Daemon running (PID 228635)
+
+--- Send start_fade with closed callback port (19999) ---
+osc_sender: sent /gradient/start_fade to 127.0.0.1:17101 (124 bytes)
+PASS: Daemon still running after start_fade to closed callback port (no crash)
+PASS: start_fade accepted: t052-fade-1
+
+--- kOscFailureThreshold eviction (requires MTC ticks) ---
+SKIP: Cannot verify 5-failure eviction without MTC source on dev host (requires MTC — see node-002 instructions above)
+
+For node-002 verification:
+  1. Start MTC source (aplaymidi or hardware MTC)
+  2. Run: ./t052_rate_limit.sh (same script, MTC drives ticks)
+  3. Expected log: MotionError on osc_send_failed after 5 consecutive failures
+  4. kOscFailureThreshold = 5 is defined in src/engine/MotionRegistry.h
+
+--- Shutdown ---
+PASS: Daemon shut down cleanly
+
+--- Summary ---
+Dev-host verification: PASS
+Full threshold test:    SKIP — requires MTC on node-002
+RESULT: PASS (dev-host scope)

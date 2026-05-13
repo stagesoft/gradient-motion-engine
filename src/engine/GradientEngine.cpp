@@ -7,18 +7,19 @@
 
 /**
  * @file GradientEngine.cpp
- * @brief GradientEngine implementation — wires MtcTickSource, NngBusClient,
+ * @brief GradientEngine implementation — wires MtcTickSource, OscServer,
  *        and MotionRegistry.
  *
  * This file is compiled into the **daemon binary** (gradient-motiond), NOT
- * into libgradient_motion. This allows it to include daemon headers (NNG)
+ * into libgradient_motion. This allows it to include daemon headers (liblo)
  * without polluting the library's public dependency set.
  *
  * @see src/engine/GradientEngine.h for the public interface.
  */
 
 #include "engine/GradientEngine.h"
-#include "daemon/comms/NngBusClient.h"
+#include "daemon/comms/OscServer.h"
+#include "logging.h"
 
 namespace gme {
 namespace engine {
@@ -40,30 +41,26 @@ GradientEngine::~GradientEngine() {
 bool GradientEngine::initialize(const GradientEngineConfig& config) {
     if (initialized_) return true;
 
-    // --- Build NngBusClient ---
-    nngClient_ = std::make_unique<gme::daemon::comms::NngBusClient>(
-        config.nodeName, queue_);
-
-    // --- Build MotionRegistry ---
+    // --- Build MotionRegistry (status events → logged, no NNG) ---
     registry_ = std::make_unique<gme::motion::MotionRegistry>(
         tickSource_,
-        statusQueue_,
-        [this](gme::signal::StatusKind k,
-               const std::string& id,
-               const std::string& reason) {
-            nngClient_->sendStatus(k, id, reason);
+        [](gme::signal::StatusKind k,
+           const std::string& id,
+           const std::string& reason) {
+            const char* kind_str = (k == gme::signal::StatusKind::MotionComplete)
+                                   ? "MotionComplete" : "MotionError";
+            GME_LOG_INFO(std::string("GradientEngine: ") + kind_str +
+                         " motion_id=" + id +
+                         (reason.empty() ? "" : " reason=" + reason));
         });
 
-    // --- Start NngBusClient (recv + drain + status worker threads) ---
-    auto err = nngClient_->start(
-        config.nngUrl,
-        [this](gme::signal::FadeCommand& cmd) {
-            registry_->apply(cmd);
-        });
+    // --- Build OscServer ---
+    oscServer_ = std::make_unique<gme::daemon::comms::OscServer>(
+        config.oscPort, config.nodeName, &queue_);
 
-    if (err != gme::daemon::comms::StartError::Ok) {
+    if (!oscServer_->start()) {
         registry_.reset();
-        nngClient_.reset();
+        oscServer_.reset();
         return false;
     }
 
@@ -74,12 +71,14 @@ bool GradientEngine::initialize(const GradientEngineConfig& config) {
     auto mtcErr = tickSource_.start(config.midiPort);
     if (mtcErr != gme::time::MtcStartError::kOk) {
         tickSource_.setTickCallback({});
-        nngClient_->stop();
+        oscServer_->stop();
         registry_.reset();
-        nngClient_.reset();
+        oscServer_.reset();
         return false;
     }
 
+    GME_LOG_INFO("GradientEngine initialized: OSC port=" +
+                 std::to_string(config.oscPort) + " node=" + config.nodeName);
     initialized_ = true;
     return true;
 }
@@ -96,10 +95,10 @@ void GradientEngine::shutdown() {
 
     if (registry_) registry_->cancelAll();
 
-    if (nngClient_) nngClient_->stop();
+    if (oscServer_) oscServer_->stop();
 
     registry_.reset();
-    nngClient_.reset();
+    oscServer_.reset();
 }
 
 // ---------------------------------------------------------------------------
@@ -107,20 +106,17 @@ void GradientEngine::shutdown() {
 // ---------------------------------------------------------------------------
 
 void GradientEngine::onTick(long mtc_ms) {
-    registry_->setTickThreadContext(true);
-
-    nngClient_->drainOnce([this](gme::signal::FadeCommand& cmd) {
+    gme::signal::FadeCommand cmd;
+    while (queue_.pop(cmd)) {
+        using Type = gme::signal::FadeCommand::Type;
+        if (cmd.type == Type::CANCEL_MOTION)
+            GME_LOG_DEBUG("GradientEngine: CANCEL_MOTION motion_id=" + cmd.motion_id);
+        else if (cmd.type == Type::CANCEL_ALL)
+            GME_LOG_DEBUG("GradientEngine: CANCEL_ALL");
         registry_->apply(cmd);
-    });
+    }
 
     registry_->tick(mtc_ms);
-
-    registry_->setTickThreadContext(false);
-
-    gme::signal::StatusEmitRequest req;
-    while (statusQueue_.pop(req)) {
-        nngClient_->pushStatus(std::move(req));
-    }
 }
 
 } // namespace engine

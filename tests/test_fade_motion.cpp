@@ -15,13 +15,14 @@
  *  - `StatusKind::FadeComplete` / `FadeError` → `MotionComplete` / `MotionError`.
  *  - `cancelFade` → `cancelMotion`.
  *  - `kOscFailureThreshold` accessed on `MotionRegistry`.
+ *  - `StatusEmitRequest` → local `StatusEvent` struct (NNG queue removed).
+ *  - `fade_id` → `motion_id`.
  *
  * ## Test infrastructure
  *
  * Tests use:
  *  - A `MtcTickSource` created without calling `start()` (`getMtcMs()` = 0).
- *  - A `LockFreeQueue<StatusEmitRequest, 64>` as the status queue.
- *  - A lambda capturing `emitted` as the `statusDirect_` callback.
+ *  - A lambda capturing `emitted` as the `statusDirect` callback.
  *  - An injectable `OscSendFn` to simulate send failures (US4).
  *  - OSC sends to 127.0.0.1:9998 (unused port; UDP fire-and-forget).
  */
@@ -36,8 +37,6 @@
 
 #include "motion/MotionRegistry.h"
 #include "signal/FadeCommand.h"
-#include "signal/LockFreeQueue.h"
-#include "signal/StatusEmitRequest.h"
 #include "time/MtcTickSource.h"
 
 // ---------------------------------------------------------------------------
@@ -56,41 +55,44 @@ static bool nearly(float a, float b, float tol = 0.005f) {
         std::fprintf(stderr, "FAIL [%s]: %.6f != %.6f (tol %.4f)\n", msg, (double)(a),(double)(b),(double)(tol)); \
         return false; } } while(0)
 
+// Local status event type (replaces StatusEmitRequest after NNG removal)
+struct StatusEvent {
+    gme::signal::StatusKind kind = gme::signal::StatusKind::MotionComplete;
+    std::string motion_id;
+    std::string reason;
+};
+
 // ---------------------------------------------------------------------------
 // Test fixture helpers
 // ---------------------------------------------------------------------------
 
 struct TestCtx {
-    gme::time::MtcTickSource                                       tickSrc;
-    gme::signal::LockFreeQueue<gme::signal::StatusEmitRequest, 64> sq;
-    std::vector<gme::signal::StatusEmitRequest>                    emitted;
-    std::function<void(gme::signal::StatusKind, const std::string&, const std::string&)> direct;
+    gme::time::MtcTickSource  tickSrc;
+    std::vector<StatusEvent>  emitted;
 
-    TestCtx() {
-        direct = [this](gme::signal::StatusKind k,
-                        const std::string& id,
-                        const std::string& reason) {
-            gme::signal::StatusEmitRequest r;
-            r.kind    = k;
-            r.fade_id = id;
-            r.reason  = reason;
-            emitted.push_back(r);
-        };
-    }
-
-    void drainQueue() {
-        gme::signal::StatusEmitRequest r;
-        while (sq.pop(r)) emitted.push_back(r);
-    }
+    TestCtx() {}
 
     std::unique_ptr<gme::motion::MotionRegistry> makeReg() {
-        return std::make_unique<gme::motion::MotionRegistry>(tickSrc, sq, direct);
+        return std::make_unique<gme::motion::MotionRegistry>(
+            tickSrc,
+            [this](gme::signal::StatusKind k,
+                   const std::string& id,
+                   const std::string& reason) {
+                emitted.push_back({k, id, reason});
+            });
     }
 
     std::unique_ptr<gme::motion::MotionRegistry> makeRegWithSend(
         gme::motion::MotionRegistry::OscSendFn fn)
     {
-        return std::make_unique<gme::motion::MotionRegistry>(tickSrc, sq, direct, fn);
+        return std::make_unique<gme::motion::MotionRegistry>(
+            tickSrc,
+            [this](gme::signal::StatusKind k,
+                   const std::string& id,
+                   const std::string& reason) {
+                emitted.push_back({k, id, reason});
+            },
+            fn);
     }
 
     static gme::signal::FadeCommand makeCmd(
@@ -105,7 +107,7 @@ struct TestCtx {
     {
         gme::signal::FadeCommand cmd;
         cmd.type         = gme::signal::FadeCommand::Type::START_FADE;
-        cmd.fade_id      = id;
+        cmd.motion_id    = id;
         cmd.curve_type   = curve_type;
         cmd.start_value  = start_v;
         cmd.end_value    = end_v;
@@ -172,10 +174,9 @@ static bool test_us1_zero_duration() {
     reg->tick(0);
     ASSERT_NEAR(captured, 0.8f, 1e-4f, "us1_zero_duration end_value sent");
 
-    ctx.drainQueue();
     bool got_complete = false;
     for (auto& r : ctx.emitted)
-        if (r.kind == gme::signal::StatusKind::MotionComplete && r.fade_id == "f1")
+        if (r.kind == gme::signal::StatusKind::MotionComplete && r.motion_id == "f1")
             got_complete = true;
     ASSERT_TRUE(got_complete, "us1_zero_duration MotionComplete emitted");
     ASSERT_TRUE(reg->size() == 0, "us1_zero_duration removed after completion");
@@ -198,10 +199,9 @@ static bool test_us1_completion_and_removal() {
     ASSERT_NEAR(vals.back(), 1.0f, 1e-4f, "us1_completion: final value = end_value");
     ASSERT_TRUE(reg->size() == 0, "us1_completion: fade removed");
 
-    ctx.drainQueue();
     bool got_complete = false;
     for (auto& r : ctx.emitted)
-        if (r.kind == gme::signal::StatusKind::MotionComplete && r.fade_id == "f1")
+        if (r.kind == gme::signal::StatusKind::MotionComplete && r.motion_id == "f1")
             got_complete = true;
     ASSERT_TRUE(got_complete, "us1_completion: MotionComplete emitted");
     return true;
@@ -249,12 +249,11 @@ static bool test_us2_fade_complete_status() {
     reg->apply(cmd);
     reg->tick(500);
 
-    ctx.drainQueue();
     bool found = false;
     for (auto& r : ctx.emitted)
-        if (r.kind == gme::signal::StatusKind::MotionComplete && r.fade_id == "fade_x")
+        if (r.kind == gme::signal::StatusKind::MotionComplete && r.motion_id == "fade_x")
             found = true;
-    ASSERT_TRUE(found, "us2_fade_complete: MotionComplete in status queue");
+    ASSERT_TRUE(found, "us2_fade_complete: MotionComplete emitted");
     return true;
 }
 
@@ -270,18 +269,17 @@ static bool test_us2_status_timing() {
     auto t1 = std::chrono::steady_clock::now();
 
     auto us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
-    ASSERT_TRUE(us < 5000, "us2_timing: tick+enqueue < 5 ms");
+    ASSERT_TRUE(us < 5000, "us2_timing: tick+emit < 5 ms");
 
-    ctx.drainQueue();
     bool found = false;
     for (auto& r : ctx.emitted)
-        if (r.kind == gme::signal::StatusKind::MotionComplete && r.fade_id == "ftiming")
+        if (r.kind == gme::signal::StatusKind::MotionComplete && r.motion_id == "ftiming")
             found = true;
-    ASSERT_TRUE(found, "us2_timing: MotionComplete enqueued in same tick");
+    ASSERT_TRUE(found, "us2_timing: MotionComplete emitted in same tick");
     return true;
 }
 
-static bool test_us2_status_queue_overflow() {
+static bool test_us2_status_all_emitted() {
     TestCtx ctx;
     auto reg = ctx.makeReg();
 
@@ -294,9 +292,7 @@ static bool test_us2_status_queue_overflow() {
         reg->apply(cmd);
         reg->tick(0);
     }
-    ctx.drainQueue();
-    ASSERT_TRUE(ctx.emitted.size() <= 64, "us2_overflow: queue capped at 64");
-    ASSERT_TRUE(ctx.emitted.size() > 0,   "us2_overflow: some statuses emitted");
+    ASSERT_TRUE(ctx.emitted.size() == 70, "us2_all_emitted: all 70 statuses emitted");
     return true;
 }
 
@@ -309,12 +305,11 @@ static bool test_us2_unknown_curve_type() {
 
     ASSERT_TRUE(reg->size() == 0, "us2_unknown_curve: fade not registered");
 
-    ctx.drainQueue();
     bool found = false;
     for (auto& r : ctx.emitted)
         if (r.kind == gme::signal::StatusKind::MotionError &&
-            r.fade_id == "bad_curve" &&
-            r.reason  == "unknown_curve_type")
+            r.motion_id == "bad_curve" &&
+            r.reason    == "unknown_curve_type")
             found = true;
     ASSERT_TRUE(found, "us2_unknown_curve: MotionError:unknown_curve_type emitted");
     return true;
@@ -347,11 +342,10 @@ static bool test_us2_supersede() {
     reg->tick(1500);
     ASSERT_TRUE(vals.size() > 1u, "us2_supersede: fadeB sends values");
 
-    ctx.drainQueue();
     bool superseded_error = false;
     for (auto& r : ctx.emitted)
         if (r.kind == gme::signal::StatusKind::MotionError &&
-            r.fade_id == "fadeA" && r.reason == "superseded")
+            r.motion_id == "fadeA" && r.reason == "superseded")
             superseded_error = true;
     ASSERT_TRUE(superseded_error, "us2_supersede: MotionError:superseded for fadeA");
     return true;
@@ -461,11 +455,10 @@ static bool test_us4_osc_failure_threshold() {
 
     ASSERT_TRUE(reg->size() == 0, "us4_threshold: fade removed after failures");
 
-    ctx.drainQueue();
     bool found = false;
     for (auto& r : ctx.emitted)
         if (r.kind == gme::signal::StatusKind::MotionError &&
-            r.fade_id == "ffail" && r.reason == "osc_send_failed")
+            r.motion_id == "ffail" && r.reason == "osc_send_failed")
             found = true;
     ASSERT_TRUE(found, "us4_threshold: MotionError:osc_send_failed emitted");
     return true;
@@ -487,7 +480,6 @@ static bool test_us4_transient_failure_recovery() {
 
     ASSERT_TRUE(reg->size() == 1, "us4_recovery: fade alive after transient failures");
 
-    ctx.drainQueue();
     for (auto& r : ctx.emitted)
         ASSERT_TRUE(r.reason != "osc_send_failed",
                     "us4_recovery: no osc_send_failed error");
@@ -556,7 +548,7 @@ int main() {
         {"us1_sentinel_resolution", test_us1_sentinel_resolution},
         {"us2_fade_complete_status",    test_us2_fade_complete_status},
         {"us2_status_timing",           test_us2_status_timing},
-        {"us2_status_queue_overflow",   test_us2_status_queue_overflow},
+        {"us2_status_all_emitted",      test_us2_status_all_emitted},
         {"us2_unknown_curve_type",      test_us2_unknown_curve_type},
         {"us2_supersede",               test_us2_supersede},
         {"us3_cancel_snap",          test_us3_cancel_snap},
