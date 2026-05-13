@@ -1,3 +1,18 @@
+cuems-gradient-motiond (0.3.0-1) unstable; urgency=medium
+
+  * Phase H — OSC Input Transport (spec 007-osc-input-transport).
+  * Replace NNG bus-client inbound transport with liblo UDP OSC listener.
+  * Add OscServer (gme::daemon::comms): liblo lo_server_thread, binds
+    0.0.0.0 (liblo 0.32 loopback-bind limitation), node_name filter.
+  * Add parseFadeOscCommand: validates /gradient/start_fade (sssisffhiss),
+    /gradient/cancel_motion (ss), /gradient/cancel_all (s).
+  * Add --osc-port CLI flag (CUEMS_GRADIENT_OSC_PORT env fallback, default 7100).
+  * Remove NNG bus-client, StatusEmitRequest, JSON-based parseFadeCommand.
+  * Remove libnng build dependency.
+  * Build-Depends: add liblo-dev (already present), remove libnng-dev.
+
+ -- Adria Masip <adria@stagelab.coop>  Wed, 13 May 2026 18:00:00 +0200
+
 cuems-gradient-motiond (0.2.0-1) unstable; urgency=medium
 
   * Initial Debian package release (Phase 5 — Application + systemd).

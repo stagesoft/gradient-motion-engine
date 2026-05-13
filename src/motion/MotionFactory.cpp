@@ -30,9 +30,9 @@ static std::unique_ptr<IMotion> makeFadeMotion(const gme::signal::FadeCommand& c
     auto curveOpt = gme::gradient::CurveFactory::createCurve(cmd.curve_type, params);
     if (!curveOpt) {
         std::fprintf(stderr, "WARNING MotionFactory: unknown curve type '%s' "
-                     "(motion_id=%s)\n", cmd.curve_type.c_str(), cmd.fade_id.c_str());
+                     "(motion_id=%s)\n", cmd.curve_type.c_str(), cmd.motion_id.c_str());
         ctx.emitStatus(gme::signal::StatusKind::MotionError,
-                       cmd.fade_id, "unknown_curve_type");
+                       cmd.motion_id, "unknown_curve_type");
         return nullptr;
     }
 
@@ -51,14 +51,14 @@ static std::unique_ptr<IMotion> makeFadeMotion(const gme::signal::FadeCommand& c
     if (!addr) {
         std::fprintf(stderr, "WARNING MotionFactory: lo_address_new failed for "
                      "%s:%d (motion_id=%s)\n",
-                     cmd.osc_host.c_str(), cmd.osc_port, cmd.fade_id.c_str());
+                     cmd.osc_host.c_str(), cmd.osc_port, cmd.motion_id.c_str());
         ctx.emitStatus(gme::signal::StatusKind::MotionError,
-                       cmd.fade_id, "osc_address_failed");
+                       cmd.motion_id, "osc_address_failed");
         return nullptr;
     }
 
     return std::make_unique<FadeMotion>(
-        cmd.fade_id,
+        cmd.motion_id,
         std::move(osc_key),
         start_ms,
         cmd.duration_ms,
@@ -83,7 +83,7 @@ std::unique_ptr<IMotion> MotionFactory::fromCommand(const gme::signal::FadeComma
         case Type::START_CROSSFADE:
             // TODO Phase 7: return makeCrossfadePair(cmd, ctx);
             std::fprintf(stderr, "INFO MotionFactory: START_CROSSFADE not yet "
-                         "implemented (motion_id=%s)\n", cmd.fade_id.c_str());
+                         "implemented (motion_id=%s)\n", cmd.motion_id.c_str());
             return nullptr;
 
         default:

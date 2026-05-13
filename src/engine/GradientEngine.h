@@ -7,8 +7,8 @@
 
 /**
  * @file GradientEngine.h
- * @brief Top-level orchestrator wiring MtcTickSource, NngBusClient, and
- *        MotionRegistry into the Phase 4 evaluation pipeline.
+ * @brief Top-level orchestrator wiring MtcTickSource, OscServer, and
+ *        MotionRegistry into the evaluation pipeline.
  *
  * `GradientEngine` owns all three subsystems and is the single point of
  * initialization and shutdown for the daemon's motion-evaluation core.
@@ -18,13 +18,13 @@
  * `GradientEngine` lives in `src/engine/` (namespace `gme::engine`) but its
  * **implementation** (`GradientEngine.cpp`) is compiled into the daemon binary
  * rather than into `libgradient_motion`. This is necessary because
- * `GradientEngine` owns `NngBusClient` (a daemon-layer component that depends
- * on NNG) while the library must remain embeddable without NNG.
+ * `GradientEngine` owns `OscServer` (a daemon-layer component that depends
+ * on liblo) while the library must remain embeddable without daemon headers.
  *
  * Concretely:
- *  - `GradientEngine.h` forward-declares `NngBusClient` — no NNG headers
+ *  - `GradientEngine.h` forward-declares `OscServer` — no liblo headers
  *    required by consumers of this header.
- *  - `GradientEngine.cpp` includes `daemon/comms/NngBusClient.h` and is
+ *  - `GradientEngine.cpp` includes `daemon/comms/OscServer.h` and is
  *    added to `gradient-motiond` sources in `CMakeLists.txt`.
  *
  * ## Threading model
@@ -32,13 +32,12 @@
  *  - `initialize()` and `shutdown()` must be called from the same thread.
  *  - `onTick` fires on the RtMidi MIDI callback thread. It is lock-free
  *    and non-blocking (Constitution Principle IV).
- *  - The NNG recv thread, fallback drain thread, and status worker thread
- *    are owned and managed by `NngBusClient`.
+ *  - The OscServer's liblo network thread is owned and managed by `OscServer`.
  *
  * @par Example:
  * @code
  *   gme::engine::GradientEngine engine;
- *   if (!engine.initialize({"MTC", "tcp://127.0.0.1:9093", "node1"}))
+ *   if (!engine.initialize({"MTC", 7100, "node1"}))
  *       return 1;
  *   // ... run loop ...
  *   engine.shutdown();
@@ -50,19 +49,18 @@
 #include "motion/MotionRegistry.h"
 #include "signal/FadeCommand.h"
 #include "signal/LockFreeQueue.h"
-#include "signal/StatusEmitRequest.h"
 #include "time/MtcTickSource.h"
 
 #include <memory>
 #include <string>
 
-// Forward-declare NngBusClient to avoid pulling daemon headers into
+// Forward-declare OscServer to avoid pulling daemon headers into
 // libgradient_motion. The destructor of GradientEngine is defined in
 // GradientEngine.cpp where the full type is available.
 namespace gme {
 namespace daemon {
 namespace comms {
-class NngBusClient;
+class OscServer;
 } // namespace comms
 } // namespace daemon
 } // namespace gme
@@ -75,8 +73,8 @@ namespace engine {
  */
 struct GradientEngineConfig {
     std::string midiPort; ///< MIDI port substring for MtcTickSource (e.g. "MTC").
-    std::string nngUrl;   ///< NNG dial URL (e.g. "tcp://127.0.0.1:9093").
-    std::string nodeName; ///< Own node name for NNG message filtering.
+    int         oscPort;  ///< UDP port for the OSC listener (e.g. 7100).
+    std::string nodeName; ///< Own node name for OSC message filtering.
 };
 
 /**
@@ -84,9 +82,8 @@ struct GradientEngineConfig {
  *
  * Owns and wires:
  *  - `MtcTickSource` (tick source)
- *  - `LockFreeQueue<FadeCommand, 64>` (command queue: NNG → tick)
- *  - `LockFreeQueue<StatusEmitRequest, 64>` (status queue: tick → NNG worker)
- *  - `NngBusClient` (NNG I/O + status worker thread)
+ *  - `LockFreeQueue<FadeCommand, 64>` (command queue: OscServer → tick)
+ *  - `OscServer` (localhost UDP OSC listener)
  *  - `MotionRegistry` (evaluation + transport output)
  */
 class GradientEngine {
@@ -96,7 +93,7 @@ public:
     /**
      * @brief Destructor. Calls `shutdown()` if still running.
      *
-     * Defined in `GradientEngine.cpp` where `NngBusClient` is complete.
+     * Defined in `GradientEngine.cpp` where `OscServer` is complete.
      */
     ~GradientEngine();
 
@@ -104,12 +101,12 @@ public:
     GradientEngine& operator=(const GradientEngine&) = delete;
 
     /**
-     * @brief Open MIDI port, open NNG socket, start all worker threads.
+     * @brief Bind OSC port, open MIDI port, start all worker threads.
      *
-     * @param config  Engine configuration (MIDI port, NNG URL, node name).
+     * @param config  Engine configuration (MIDI port, OSC port, node name).
      *
-     * @return `true` on success. `false` if MIDI port not found or NNG socket
-     *         failed to open.
+     * @return `true` on success. `false` if MIDI port not found or OSC
+     *         socket failed to bind.
      *
      * @throws Never.
      */
@@ -120,7 +117,7 @@ public:
      *
      * 1. Deregisters tick callback.
      * 2. Calls `MotionRegistry::cancelAll()` (no final OSC values sent).
-     * 3. Calls `NngBusClient::stop()` (joins recv + drain + status worker).
+     * 3. Calls `OscServer::stop()` (joins liblo network thread).
      *
      * Safe to call more than once (idempotent).
      *
@@ -134,11 +131,8 @@ private:
      *
      * Fires from the RtMidi MIDI callback thread (lock-free path required).
      *
-     * 1. Set tick-thread context on registry.
-     * 2. Try drain: `nngClient_->drainOnce(applyCmd)`.
-     * 3. `registry_->tick(mtc_ms)`.
-     * 4. Clear tick-thread context.
-     * 5. Flush statusQueue_ into NngBusClient.
+     * 1. Drain queue_: call `registry_->apply(cmd)` for each command.
+     * 2. `registry_->tick(mtc_ms)`.
      *
      * @param mtc_ms  Current MTC head position in milliseconds.
      */
@@ -148,11 +142,10 @@ private:
     // Owned subsystems
     // -----------------------------------------------------------------------
 
-    gme::time::MtcTickSource                                        tickSource_;
-    gme::signal::LockFreeQueue<gme::signal::FadeCommand, 64>        queue_;
-    gme::signal::LockFreeQueue<gme::signal::StatusEmitRequest, 64>  statusQueue_;
-    std::unique_ptr<gme::daemon::comms::NngBusClient>               nngClient_;
-    std::unique_ptr<gme::motion::MotionRegistry>                    registry_;
+    gme::time::MtcTickSource                                 tickSource_;
+    gme::signal::LockFreeQueue<gme::signal::FadeCommand, 64> queue_;
+    std::unique_ptr<gme::daemon::comms::OscServer>           oscServer_;
+    std::unique_ptr<gme::motion::MotionRegistry>             registry_;
 
     bool initialized_ = false;
 };

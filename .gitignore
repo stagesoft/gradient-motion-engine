@@ -5,6 +5,7 @@ build_*/
 bin/
 obj/
 out/
+obj-*/
 
 # Object files
 *.o
@@ -26,3 +27,19 @@ Thumbs.db
 .env*
 *.tmp
 *.swp
+
+# debian/ build artifacts (dpkg-buildpackage / dh_* generated; .deb produced outside tree)
+# Tracked: changelog, control, copyright, rules, source/format
+debian/.debhelper/
+debian/debhelper-build-stamp
+debian/files
+debian/*.substvars
+debian/*.debhelper.log
+debian/cuems-*/
+debian/tmp/
+
+# deploy_tests compiled binaries (sources are tracked, binaries are not)
+dev/deploy_tests/s???_*
+!dev/deploy_tests/s???_*.cpp
+!dev/deploy_tests/s???_*.sh
+!dev/deploy_tests/results/

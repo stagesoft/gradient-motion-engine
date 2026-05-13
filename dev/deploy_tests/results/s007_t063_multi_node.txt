@@ -1,0 +1,41 @@
+T063 — Two-Daemon Multi-Node Isolation Test
+Date: dimecres, 13 de maig de 2026, 17:53:27 CEST
+Node A: multi-node-a on port 17300
+Node B: multi-node-b on port 17301
+
+--- Prerequisites ---
+PASS: daemon binary exists
+PASS: osc_sender built
+
+--- Start daemons ---
+Node A PID: 228750
+Node B PID: 228755
+PASS: Node A running
+PASS: Node B running
+
+--- Test 1: correct-node acceptance ---
+osc_sender: sent /gradient/start_fade to 127.0.0.1:17300 (128 bytes)
+PASS: Node A accepted start_fade for t063-a-fade-1
+osc_sender: sent /gradient/start_fade to 127.0.0.1:17301 (128 bytes)
+PASS: Node B accepted start_fade for t063-b-fade-1
+
+--- Test 2: cross-node isolation (node_name mismatch should drop) ---
+osc_sender: sent /gradient/start_fade to 127.0.0.1:17300 (128 bytes)
+PASS: Node A dropped cross-node message (node_name mismatch filter working)
+osc_sender: sent /gradient/start_fade to 127.0.0.1:17301 (128 bytes)
+PASS: Node B dropped cross-node message (node_name mismatch filter working)
+
+--- Test 3: cancel_all per node ---
+osc_sender: sent /gradient/cancel_all to 127.0.0.1:17300 (44 bytes)
+PASS: Node A accepted cancel_all
+osc_sender: sent /gradient/cancel_all to 127.0.0.1:17301 (44 bytes)
+PASS: Node B accepted cancel_all
+
+--- Test 4: cancel_all isolation ---
+PASS: cancel_all isolation: each daemon receives only its own port messages (UDP port separation)
+
+--- Shutdown ---
+PASS: Both daemons shut down
+
+--- Summary ---
+RESULT: PASS — two-daemon multi-node isolation verified

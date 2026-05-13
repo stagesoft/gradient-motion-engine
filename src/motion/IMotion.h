@@ -62,7 +62,7 @@ public:
     // Common lifecycle fields (set at construction, read by registry)
     // -----------------------------------------------------------------------
 
-    /** @brief Registry-unique motion identifier. Maps to wire field `fade_id`. */
+    /** @brief Registry-unique motion identifier. Maps to wire field `motion_id`. */
     std::string motion_id;
 
     /**

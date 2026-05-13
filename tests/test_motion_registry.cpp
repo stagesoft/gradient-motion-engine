@@ -29,7 +29,6 @@
 #include "motion/MotionRegistry.h"
 #include "signal/FadeCommand.h"
 #include "signal/LockFreeQueue.h"
-#include "signal/StatusEmitRequest.h"
 #include "time/MtcTickSource.h"
 
 // ---------------------------------------------------------------------------
@@ -41,6 +40,13 @@
         std::fprintf(stderr, "FAIL [%s]: %s (line %d)\n", msg, #cond, __LINE__); \
         return false; \
     } } while(0)
+
+// Local status event type (replaces StatusEmitRequest after NNG removal)
+struct StatusEvent {
+    gme::signal::StatusKind kind = gme::signal::StatusKind::MotionComplete;
+    std::string motion_id;
+    std::string reason;
+};
 
 // ---------------------------------------------------------------------------
 // TestMotion — scripted IMotion double
@@ -56,6 +62,7 @@ struct TestMotion final : gme::motion::IMotion {
     int eval_calls        = 0;
     int snap_calls        = 0;
     const IMotion* inherit_arg = nullptr;
+    std::function<void()> on_snap;  // called from sendSnapToEnd before destruction
 
     TestMotion(std::string id, std::string key) {
         motion_id = std::move(id);
@@ -71,7 +78,7 @@ struct TestMotion final : gme::motion::IMotion {
         return {};  // default: not completed, not failed
     }
 
-    void sendSnapToEnd() override { ++snap_calls; }
+    void sendSnapToEnd() override { ++snap_calls; if (on_snap) on_snap(); }
 
     void inheritFrom(const IMotion& prior) override {
         inherit_arg = &prior;
@@ -89,28 +96,18 @@ static std::unique_ptr<TestMotion> makeMotion(const std::string& id,
 // ---------------------------------------------------------------------------
 
 struct Ctx {
-    gme::time::MtcTickSource                                       tickSrc;
-    gme::signal::LockFreeQueue<gme::signal::StatusEmitRequest, 64> sq;
-    std::vector<gme::signal::StatusEmitRequest>                    emitted;
+    gme::time::MtcTickSource  tickSrc;
+    std::vector<StatusEvent>  emitted;
 
     Ctx() {}
 
-    void drainQueue() {
-        gme::signal::StatusEmitRequest r;
-        while (sq.pop(r)) emitted.push_back(r);
-    }
-
     std::unique_ptr<gme::motion::MotionRegistry> makeReg() {
         return std::make_unique<gme::motion::MotionRegistry>(
-            tickSrc, sq,
+            tickSrc,
             [this](gme::signal::StatusKind k,
                    const std::string& id,
                    const std::string& reason) {
-                gme::signal::StatusEmitRequest r;
-                r.kind    = k;
-                r.fade_id = id;
-                r.reason  = reason;
-                emitted.push_back(r);
+                emitted.push_back({k, id, reason});
             });
     }
 
@@ -118,7 +115,7 @@ struct Ctx {
                    const std::string& id,
                    const std::string& reason = "") const {
         for (auto& e : emitted) {
-            if (e.kind == k && e.fade_id == id &&
+            if (e.kind == k && e.motion_id == id &&
                 (reason.empty() || e.reason == reason))
                 return true;
         }
@@ -209,12 +206,15 @@ static bool test_cancel_snap_calls_snap() {
     Ctx ctx;
     auto reg = ctx.makeReg();
 
-    auto* m = new TestMotion("m1", "host:1:/a");
-    reg->addMotion(std::unique_ptr<TestMotion>(m));
+    int snap_count = 0;
+    auto motion = makeMotion("m1", "host:1:/a");
+    motion->on_snap = [&snap_count]{ snap_count++; };
+    reg->addMotion(std::move(motion));
     ASSERT_TRUE(reg->size() == 1, "cancel_snap: inserted");
 
     reg->cancelMotion("m1", /*snap_to_end=*/true);
-    ASSERT_TRUE(m->snap_calls == 1, "cancel_snap: sendSnapToEnd called once");
+    // motion is destroyed here — use external snap_count, not the raw pointer
+    ASSERT_TRUE(snap_count == 1, "cancel_snap: sendSnapToEnd called once");
     ASSERT_TRUE(reg->size() == 0, "cancel_snap: removed");
     return true;
 }
@@ -224,11 +224,13 @@ static bool test_cancel_hold_no_snap() {
     Ctx ctx;
     auto reg = ctx.makeReg();
 
-    auto* m = new TestMotion("m1", "host:1:/a");
-    reg->addMotion(std::unique_ptr<TestMotion>(m));
+    int snap_count = 0;
+    auto motion = makeMotion("m1", "host:1:/a");
+    motion->on_snap = [&snap_count]{ snap_count++; };
+    reg->addMotion(std::move(motion));
 
     reg->cancelMotion("m1", /*snap_to_end=*/false);
-    ASSERT_TRUE(m->snap_calls == 0, "cancel_hold: sendSnapToEnd NOT called");
+    ASSERT_TRUE(snap_count == 0, "cancel_hold: sendSnapToEnd NOT called");
     ASSERT_TRUE(reg->size() == 0, "cancel_hold: removed");
     return true;
 }
@@ -238,11 +240,11 @@ static bool test_cancel_all_no_snap() {
     Ctx ctx;
     auto reg = ctx.makeReg();
 
-    TestMotion* ptrs[3];
+    int snap_counts[3] = {0, 0, 0};
     for (int i = 0; i < 3; ++i) {
-        ptrs[i] = new TestMotion("m" + std::to_string(i),
-                                  "host:1:/" + std::to_string(i));
-        reg->addMotion(std::unique_ptr<TestMotion>(ptrs[i]));
+        auto m = makeMotion("m" + std::to_string(i), "host:1:/" + std::to_string(i));
+        m->on_snap = [i, &snap_counts]{ snap_counts[i]++; };
+        reg->addMotion(std::move(m));
     }
     ASSERT_TRUE(reg->size() == 3, "cancel_all: inserted 3");
 
@@ -254,7 +256,7 @@ static bool test_cancel_all_no_snap() {
     ASSERT_TRUE(reg->size() == 0, "cancel_all: all removed");
     ASSERT_TRUE(ms < 5, "cancel_all: completes < 5 ms (SC-004)");
     for (int i = 0; i < 3; ++i)
-        ASSERT_TRUE(ptrs[i]->snap_calls == 0, "cancel_all: no sendSnapToEnd");
+        ASSERT_TRUE(snap_counts[i] == 0, "cancel_all: no sendSnapToEnd");
     return true;
 }
 
@@ -262,7 +264,6 @@ static bool test_cancel_all_no_snap() {
 static bool test_tick_removes_completed() {
     Ctx ctx;
     auto reg = ctx.makeReg();
-    reg->setTickThreadContext(true);
 
     auto* m = new TestMotion("m1", "host:1:/a");
     m->script = { {true, false, nullptr} };  // completed on first tick
@@ -270,8 +271,6 @@ static bool test_tick_removes_completed() {
 
     reg->tick(0);
     ASSERT_TRUE(reg->size() == 0, "tick_complete: removed after completion");
-
-    ctx.drainQueue();
     ASSERT_TRUE(ctx.hasStatus(gme::signal::StatusKind::MotionComplete, "m1"),
                 "tick_complete: MotionComplete emitted");
     return true;
@@ -281,7 +280,6 @@ static bool test_tick_removes_completed() {
 static bool test_tick_osc_failure_threshold() {
     Ctx ctx;
     auto reg = ctx.makeReg();
-    reg->setTickThreadContext(true);
 
     auto* m = new TestMotion("m1", "host:1:/a");
     // All ticks fail
@@ -294,8 +292,6 @@ static bool test_tick_osc_failure_threshold() {
         reg->tick(i * 5);
 
     ASSERT_TRUE(reg->size() == 0, "tick_fail_thresh: removed at threshold");
-
-    ctx.drainQueue();
     ASSERT_TRUE(ctx.hasStatus(gme::signal::StatusKind::MotionError,
                               "m1", "osc_send_failed"),
                 "tick_fail_thresh: MotionError:osc_send_failed emitted");
@@ -306,7 +302,6 @@ static bool test_tick_osc_failure_threshold() {
 static bool test_tick_failure_reset_on_success() {
     Ctx ctx;
     auto reg = ctx.makeReg();
-    reg->setTickThreadContext(true);
 
     auto* m = new TestMotion("m1", "host:1:/a");
     // 3 failures then 1 success — below threshold, should survive
@@ -317,18 +312,15 @@ static bool test_tick_failure_reset_on_success() {
     for (int i = 0; i < 4; ++i) reg->tick(i * 5);
     ASSERT_TRUE(reg->size() == 1, "tick_reset: alive after transient failures");
     ASSERT_TRUE(m->consecutive_osc_failures == 0, "tick_reset: counter reset to 0");
-
-    ctx.drainQueue();
     ASSERT_TRUE(!ctx.hasStatus(gme::signal::StatusKind::MotionError, "m1", "osc_send_failed"),
                 "tick_reset: no terminal error emitted");
     return true;
 }
 
-/** 70 completions with 64-slot queue → ≤ 64 statuses, no tick-thread block. */
-static bool test_status_queue_overflow() {
+/** 70 completions all emit through direct callback (no queue cap). */
+static bool test_status_all_emitted() {
     Ctx ctx;
     auto reg = ctx.makeReg();
-    reg->setTickThreadContext(true);
 
     for (int i = 0; i < 70; ++i) {
         auto* m = new TestMotion("m" + std::to_string(i),
@@ -337,48 +329,21 @@ static bool test_status_queue_overflow() {
         reg->addMotion(std::unique_ptr<TestMotion>(m));
         reg->tick(0);
     }
-    ctx.drainQueue();
-    ASSERT_TRUE(ctx.emitted.size() <= 64, "queue_overflow: ≤ 64 statuses");
-    ASSERT_TRUE(ctx.emitted.size() > 0,   "queue_overflow: some statuses");
+    ASSERT_TRUE(ctx.emitted.size() == 70, "all_emitted: all 70 statuses captured");
     return true;
 }
 
-/** Drain-thread-context supersede emits via statusDirect_ (not queue). */
-static bool test_status_routing_drain_context() {
+/** Supersede emits MotionError via statusDirect callback. */
+static bool test_status_supersede_emitted() {
     Ctx ctx;
     auto reg = ctx.makeReg();
-    // tickThreadContext_ = false (drain context, default)
 
     const std::string key = "host:1:/x";
     reg->addMotion(makeMotion("m1", key));
     reg->addMotion(makeMotion("m2", key));  // supersedes m1
 
-    // Drain context → emitted directly (already in ctx.emitted via direct cb)
     ASSERT_TRUE(ctx.hasStatus(gme::signal::StatusKind::MotionError, "m1", "superseded"),
-                "drain_route: supersede status via statusDirect_");
-    // Queue should be empty (not pushed to statusQueue_)
-    gme::signal::StatusEmitRequest r;
-    ASSERT_TRUE(!ctx.sq.pop(r), "drain_route: statusQueue_ is empty");
-    return true;
-}
-
-/** Tick-thread-context supersede pushes into statusQueue_ (not direct). */
-static bool test_status_routing_tick_context() {
-    Ctx ctx;
-    auto reg = ctx.makeReg();
-    reg->setTickThreadContext(true);
-
-    const std::string key = "host:1:/y";
-    reg->addMotion(makeMotion("m1", key));
-    ctx.emitted.clear();  // clear drain-context supersede from m1's own add
-
-    reg->addMotion(makeMotion("m2", key));
-
-    // Tick context → should be in queue, not in emitted
-    ASSERT_TRUE(ctx.emitted.empty(), "tick_route: not in direct emitted");
-    ctx.drainQueue();
-    ASSERT_TRUE(ctx.hasStatus(gme::signal::StatusKind::MotionError, "m1", "superseded"),
-                "tick_route: supersede status via queue");
+                "supersede_emitted: supersede status via statusDirect");
     return true;
 }
 
@@ -388,15 +353,12 @@ static bool test_status_routing_tick_context() {
 
 static bool test_lsp_fade_motion_through_registry() {
     gme::time::MtcTickSource tickSrc;
-    gme::signal::LockFreeQueue<gme::signal::StatusEmitRequest, 64> sq;
-    std::vector<gme::signal::StatusEmitRequest> emitted;
+    std::vector<StatusEvent> emitted;
 
     gme::motion::MotionRegistry reg(
-        tickSrc, sq,
+        tickSrc,
         [&](gme::signal::StatusKind k, const std::string& id, const std::string& r) {
-            gme::signal::StatusEmitRequest req;
-            req.kind = k; req.fade_id = id; req.reason = r;
-            emitted.push_back(req);
+            emitted.push_back({k, id, r});
         },
         [](lo_address, const char*, float) -> int { return 0; });
 
@@ -419,18 +381,15 @@ static bool test_lsp_fade_motion_through_registry() {
     reg.addMotion(std::move(fm));
     ASSERT_TRUE(reg.size() == 1, "lsp: FadeMotion inserted");
 
-    reg.setTickThreadContext(true);
     reg.tick(500);   // t=0.5, not complete
     ASSERT_TRUE(reg.size() == 1, "lsp: still active at t=0.5");
 
     reg.tick(1000);  // t=1.0, completes
     ASSERT_TRUE(reg.size() == 0, "lsp: removed on completion");
 
-    gme::signal::StatusEmitRequest r;
-    while (sq.pop(r)) emitted.push_back(r);
     bool found = false;
     for (auto& e : emitted)
-        if (e.kind == gme::signal::StatusKind::MotionComplete && e.fade_id == "lsp_m1")
+        if (e.kind == gme::signal::StatusKind::MotionComplete && e.motion_id == "lsp_m1")
             found = true;
     ASSERT_TRUE(found, "lsp: MotionComplete emitted for FadeMotion");
     return true;
@@ -449,13 +408,12 @@ int main() {
         {"add_duplicate_id_same_path",       test_add_duplicate_id_same_path_rejects},
         {"cancel_snap_calls_snap",           test_cancel_snap_calls_snap},
         {"cancel_hold_no_snap",              test_cancel_hold_no_snap},
-        {"cancel_all_no_snap",               test_cancel_all_no_snap},
+        {"cancel_all_no_snap",              test_cancel_all_no_snap},
         {"tick_removes_completed",           test_tick_removes_completed},
         {"tick_osc_failure_threshold",       test_tick_osc_failure_threshold},
         {"tick_failure_reset_on_success",    test_tick_failure_reset_on_success},
-        {"status_queue_overflow",            test_status_queue_overflow},
-        {"status_routing_drain_context",     test_status_routing_drain_context},
-        {"status_routing_tick_context",      test_status_routing_tick_context},
+        {"status_all_emitted",               test_status_all_emitted},
+        {"status_supersede_emitted",         test_status_supersede_emitted},
         {"lsp_fade_motion_through_registry", test_lsp_fade_motion_through_registry},
     };
 
