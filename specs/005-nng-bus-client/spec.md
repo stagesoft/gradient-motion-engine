@@ -1,9 +1,23 @@
 # Feature Specification: Phase 3 — NNG Bus Client, FadeCommand & LockFreeQueue
 
-**Feature Branch**: `005-nng-bus-client`  
-**Created**: 2026-04-22  
-**Status**: Draft  
+**Feature Branch**: `005-nng-bus-client`
+**Created**: 2026-04-22
+**Status**: Superseded (for inbound command transport)
+**Superseded by**: [007-osc-input-transport](../007-osc-input-transport/spec.md) (Phase H, 2026-05-13)
 **Input**: User description: "start Phase 3 development as layed out in dev/C++ Node-Level GradientEngine — Implementation Plan.md"
+
+> **Superseded notice (2026-05-13)** — The NNG bus0 inbound command path described here is superseded by feature [007-osc-input-transport](../007-osc-input-transport/spec.md). Phase E integration testing on node-002 empirically demonstrated that NNG bus0 does not auto-relay between dialers in the star topology CUEMS deploys, so commands from the local NodeEngine never reach the daemon. The architectural decision in Phase H reclassifies `gradient-motiond` as a Plane-2 player (local UDP OSC, matching AudioPlayer / VideoComposer / DmxPlayer) instead of a Plane-1 NNG peer. Background and rationale: [specs/planning/phase-h-osc-refactor-plan.md](../planning/phase-h-osc-refactor-plan.md), [specs/planning/PHASE-H-HANDOFF-NOTES.md](../planning/PHASE-H-HANDOFF-NOTES.md).
+>
+> The following sub-elements of this spec remain valid and are referenced by feature 007 and by features 002/003/004/006:
+> - The `FadeCommand` struct shape, field set, and validation semantics (re-parsed from OSC instead of JSON).
+> - The `node_name` filter pattern (carried forward as defense-in-depth on localhost UDP).
+> - The lock-free SPSC queue handoff between the network-callback thread and the tick-evaluation thread.
+> - The SIGTERM/SIGINT shutdown contract (cancel all, hold last-sent value, exit within 2 seconds) — minus the status broadcasts, which are removed.
+>
+> The following parts of this spec are **invalidated** by feature 007 and should be read as historical only:
+> - NNG bus0 dial / listener wiring (`controller.local`, Avahi dependency, `--nng-url` flag).
+> - The outbound status envelope (`fade_complete`, `fade_error`) — daemon-side status emission is removed; lifecycle reporting moves to the NodeEngine cue loop.
+> - The `target: "gradientengine"` NodeOperation envelope shape — the OSC command schema in feature 007 replaces it.
 
 ## Clarifications
 
