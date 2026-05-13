@@ -28,8 +28,6 @@
 #include "motion/IMotion.h"
 #include "motion/MotionRegistry.h"
 #include "signal/FadeCommand.h"
-#include "signal/LockFreeQueue.h"
-#include "signal/StatusEmitRequest.h"
 #include "time/MtcTickSource.h"
 
 // ---------------------------------------------------------------------------
@@ -39,7 +37,7 @@
 static gme::signal::FadeCommand makeCmd(int idx) {
     gme::signal::FadeCommand cmd;
     cmd.type         = gme::signal::FadeCommand::Type::START_FADE;
-    cmd.fade_id      = "bench" + std::to_string(idx);
+    cmd.motion_id      = "bench" + std::to_string(idx);
     cmd.curve_type   = "sigmoid";
     cmd.start_value  = 0.0f;
     cmd.end_value    = 1.0f;
@@ -53,9 +51,8 @@ static gme::signal::FadeCommand makeCmd(int idx) {
 
 static bool runFadeMotionBench() {
     gme::time::MtcTickSource tickSrc;
-    gme::signal::LockFreeQueue<gme::signal::StatusEmitRequest, 64> sq;
 
-    gme::motion::MotionRegistry reg(tickSrc, sq,
+    gme::motion::MotionRegistry reg(tickSrc,
         [](gme::signal::StatusKind, const std::string&, const std::string&) {});
 
     for (int i = 0; i < 50; ++i) {
@@ -123,9 +120,8 @@ struct NoOpMotion final : gme::motion::IMotion {
 
 static bool runNoOpBench() {
     gme::time::MtcTickSource tickSrc;
-    gme::signal::LockFreeQueue<gme::signal::StatusEmitRequest, 64> sq;
 
-    gme::motion::MotionRegistry reg(tickSrc, sq,
+    gme::motion::MotionRegistry reg(tickSrc,
         [](gme::signal::StatusKind, const std::string&, const std::string&) {});
 
     for (int i = 0; i < 50; ++i)

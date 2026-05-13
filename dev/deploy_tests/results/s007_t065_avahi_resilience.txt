@@ -1,0 +1,20 @@
+T065 — Avahi Resilience Test
+Extracted from journalctl _PID=223916
+
+--- Journal (PID 223916) ---
+de maig 13 17:24:57 despatx Cuems:GradientEngine[223916]: gradient-motiond starting
+de maig 13 17:24:57 despatx Cuems:GradientEngine[223916]:   MIDI port : Midi Through Port-0
+de maig 13 17:24:57 despatx Cuems:GradientEngine[223916]:   OSC port  : 17200
+de maig 13 17:24:57 despatx Cuems:GradientEngine[223916]:   Node name : test-avahi
+de maig 13 17:24:57 despatx Cuems:GradientEngine[223916]:   Log level : debug
+de maig 13 17:24:57 despatx Cuems:GradientEngine[223916]:   Conf path : /etc/cuems
+de maig 13 17:24:57 despatx Cuems:GradientEngine[223916]: OscServer bound: UDP 0.0.0.0:17200 (node_name filter active, restrict to lo via nftables)
+de maig 13 17:24:57 despatx Cuems:GradientEngine[223916]: going to open midi port
+de maig 13 17:24:57 despatx Cuems:GradientEngine[223916]: GradientEngine initialized: OSC port=17200 node=test-avahi
+de maig 13 17:24:57 despatx Cuems:GradientEngine[223916]: gradient-motiond running — waiting for signal
+de maig 13 17:25:33 despatx Cuems:GradientEngine[223916]: OscServer: accepted /gradient/cancel_all motion_id=
+de maig 13 17:25:33 despatx Cuems:GradientEngine[223916]: OscServer: accepted /gradient/start_fade motion_id=fade-t065
+de maig 13 17:25:49 despatx Cuems:GradientEngine[223916]: gradient-motiond shutting down
+de maig 13 17:25:49 despatx Cuems:GradientEngine[223916]: OscServer stopped
+de maig 13 17:25:49 despatx Cuems:GradientEngine[223916]: Log finished
+

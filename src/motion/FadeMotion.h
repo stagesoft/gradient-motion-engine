@@ -67,7 +67,7 @@ public:
     /**
      * @brief Construct a fully-wired fade motion.
      *
-     * @param motion_id     Registry-unique id (from `FadeCommand::fade_id`).
+     * @param motion_id     Registry-unique id (from `FadeCommand::motion_id`).
      * @param osc_key       Composite supersede key `"host:port:path"`.
      * @param start_mtc_ms  Absolute MTC start time. Must be ≥ 0.
      * @param duration_ms   Fade duration in ms. 0 → completes on first tick.

@@ -19,10 +19,16 @@
  * | --midi-port    | -m    | string | "Midi Through Port-0"|
  * | --log-level    | -l    | string | "info"               |
  * | --conf-path    | -c    | string | "/etc/cuems"         |
- * | --nng-url      | -u    | string | "tcp://127.0.0.1:9093"|
+ * | --osc-port     | -p    | int    | 7100                 |
  * | --node-name    | -n    | string | hostname             |
  * | --help         | -h    | flag   | —                    |
  * | --version      | -V    | flag   | —                    |
+ *
+ * @par OSC port resolution order (research.md Decision 5):
+ * 1. --osc-port CLI flag.
+ * 2. CUEMS_GRADIENT_OSC_PORT environment variable.
+ * 3. /etc/cuems/settings.xml \c \<gradient_osc_port\> element (future).
+ * 4. Compile-time default 7100.
  *
  * @par Log level validation:
  * The --log-level value MUST be one of: emergency, alert, critical,
@@ -37,7 +43,7 @@
  *     // -1 = help/version requested, >0 = error
  *     return (result < 0) ? 0 : 1;
  * }
- * std::string port = config.getMidiPort();
+ * int port = config.getGradientOscPort();
  * @endcode
  */
 
@@ -61,7 +67,7 @@ public:
      * @brief Construct with default configuration values.
      *
      * Defaults: midiPort_ = "Midi Through Port-0", logLevel_ = "info",
-     * confPath_ = "/etc/cuems".
+     * confPath_ = "/etc/cuems", oscPort_ = 7100.
      */
     ConfigurationManager();
 
@@ -96,8 +102,13 @@ public:
     /** @brief Get the configured CUEMS configuration directory path. */
     const std::string& getConfPath() const { return confPath_; }
 
-    /** @brief Get the NNG dial URL (from --nng-url). */
-    const std::string& getNngUrl() const { return nngUrl_; }
+    /**
+     * @brief Get the OSC port the daemon listens on.
+     *
+     * Resolution order: --osc-port flag > CUEMS_GRADIENT_OSC_PORT env
+     * var > settings.xml \c \<gradient_osc_port\> (future) > default 7100.
+     */
+    int getGradientOscPort() const { return oscPort_; }
 
     /** @brief Get the node name (from --node-name or hostname default). */
     const std::string& getNodeName() const { return nodeName_; }
@@ -106,7 +117,7 @@ private:
     std::string midiPort_;
     std::string logLevel_;
     std::string confPath_;
-    std::string nngUrl_;
+    int         oscPort_;
     std::string nodeName_;
 
     /**

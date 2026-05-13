@@ -28,7 +28,6 @@
 
 #include "motion/IMotion.h"
 #include "signal/FadeCommand.h"
-#include "signal/StatusEmitRequest.h"
 #include "time/MtcTickSource.h"
 
 #include <lo/lo.h>

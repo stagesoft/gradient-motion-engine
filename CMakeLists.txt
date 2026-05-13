@@ -25,7 +25,7 @@ cmake_minimum_required(VERSION 3.10)
 # Allow target_link_libraries() on targets defined in other directories
 # (needed to link cuemslogger into mtcreceiver from the root CMakeLists)
 cmake_policy(SET CMP0079 NEW)
-project(gradient-motion-engine LANGUAGES CXX)
+project(gradient-motion-engine VERSION 0.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -56,7 +56,6 @@ endif()
 if(BUILD_DAEMON)
     # Required for daemon: RtMidi (needed by mtcreceiver)
     pkg_check_modules(RTMIDI REQUIRED rtmidi)
-    find_package(nng REQUIRED)
 endif()
 
 pkg_check_modules(TINYXML2 tinyxml2)
@@ -139,6 +138,14 @@ enable_testing()
 add_subdirectory(tests)
 
 # ===========================================================
+# Version header (generated from project VERSION above)
+# ===========================================================
+configure_file(
+    "${CMAKE_SOURCE_DIR}/daemon/config/version.h.in"
+    "${CMAKE_BINARY_DIR}/daemon/config/version.h"
+)
+
+# ===========================================================
 # Daemon executable
 # ===========================================================
 if(BUILD_DAEMON)
@@ -146,7 +153,7 @@ if(BUILD_DAEMON)
         daemon/main.cpp
         daemon/GradientEngineApplication.cpp
         daemon/config/ConfigurationManager.cpp
-        daemon/comms/NngBusClient.cpp
+        daemon/comms/OscServer.cpp
         src/engine/GradientEngine.cpp
     )
 
@@ -154,13 +161,13 @@ if(BUILD_DAEMON)
         ${CMAKE_SOURCE_DIR}
         ${CMAKE_SOURCE_DIR}/src
         ${CMAKE_SOURCE_DIR}/daemon
+        ${CMAKE_BINARY_DIR}/daemon/config
     )
 
     target_link_libraries(gradient-motiond PRIVATE
         gradient_motion
         mtcreceiver
         ${RTMIDI_LIBRARIES}
-        nng::nng
         pthread
     )
 
@@ -173,4 +180,12 @@ if(BUILD_DAEMON)
         target_compile_definitions(gradient-motiond PRIVATE HAVE_CUEMS_LOGGER)
         target_link_libraries(gradient-motiond PRIVATE cuemslogger)
     endif()
+
+    # Install rules — places the daemon at <prefix>/bin/gradient-motiond.
+    # debian/rules sets CMAKE_INSTALL_PREFIX=/usr so the .deb ships
+    # /usr/bin/gradient-motiond, matching the path that
+    # cuems-common's cuems-gradient-motiond.service ExecStart= expects.
+    include(GNUInstallDirs)
+    install(TARGETS gradient-motiond
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()

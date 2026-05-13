@@ -1,0 +1,30 @@
+T034 — Quickstart §3-4 Smoke Test
+Date: dimecres, 13 de maig de 2026, 17:51:56 CEST
+Port: 17100  Node: smoke-node
+
+--- Prerequisites ---
+PASS: daemon binary exists: /disk/Projects/StageLab/gradient-motion-engine/build_daemon/gradient-motiond
+PASS: osc_sender built
+
+--- §3: Start daemon ---
+Daemon PID: 228453
+PASS: Daemon running (PID 228453)
+PASS: UDP 17100 open (ss shows 0.0.0.0:17100 — expected; liblo 0.32 binds 0.0.0.0)
+
+--- §4: OSC message acceptance ---
+osc_sender: sent /gradient/start_fade to 127.0.0.1:17100 (120 bytes)
+PASS: start_fade accepted: t034-fade-1
+osc_sender: sent /gradient/cancel_motion to 127.0.0.1:17100 (52 bytes)
+PASS: cancel_motion accepted: t034-fade-1
+osc_sender: sent /gradient/cancel_all to 127.0.0.1:17100 (40 bytes)
+PASS: cancel_all accepted
+
+--- Negative path: wrong node_name (expect drop, no acceptance) ---
+osc_sender: sent /gradient/start_fade to 127.0.0.1:17100 (124 bytes)
+PASS: Wrong-node message not accepted (node_name filter working)
+
+--- Shutdown ---
+PASS: Clean shutdown logged
+
+--- Summary ---
+RESULT: PASS

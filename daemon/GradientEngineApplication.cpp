@@ -75,15 +75,15 @@ int GradientEngineApplication::initialize(int argc, char** argv) {
     // Log startup information
     GME_LOG_INFO("gradient-motiond starting");
     GME_LOG_INFO("  MIDI port : " + config_->getMidiPort());
-    GME_LOG_INFO("  NNG URL   : " + config_->getNngUrl());
+    GME_LOG_INFO("  OSC port  : " + std::to_string(config_->getGradientOscPort()));
     GME_LOG_INFO("  Node name : " + config_->getNodeName());
     GME_LOG_INFO("  Log level : " + config_->getLogLevel());
     GME_LOG_INFO("  Conf path : " + config_->getConfPath());
 
-    // Initialize GradientEngine (opens MIDI port and NNG socket)
+    // Initialize GradientEngine (opens MIDI port and OSC socket)
     gme::engine::GradientEngineConfig engCfg;
     engCfg.midiPort = config_->getMidiPort();
-    engCfg.nngUrl   = config_->getNngUrl();
+    engCfg.oscPort  = config_->getGradientOscPort();
     engCfg.nodeName = config_->getNodeName();
 
     if (!engine_->initialize(engCfg)) {
@@ -117,7 +117,7 @@ void GradientEngineApplication::shutdown() {
 
     GME_LOG_INFO("gradient-motiond shutting down");
 
-    // Gracefully stop the engine (cancels fades, joins NNG threads)
+    // Gracefully stop the engine (cancels fades, joins OSC server thread)
     if (engine_) {
         engine_->shutdown();
         engine_.reset();

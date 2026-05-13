@@ -11,29 +11,38 @@
  */
 
 #include "ConfigurationManager.h"
+#include "version.h"
 
 #include <getopt.h>
 #include <iostream>
 #include <algorithm>
 #include <vector>
 #include <climits>
+#include <cstdlib>
 #include <unistd.h>
-
-// Version string — update per release
-static const char* VERSION_STRING = "gradient-motiond 0.1.0 (Phase 0)";
 
 static const std::vector<std::string> VALID_LOG_LEVELS = {
     "emergency", "alert", "critical", "error",
     "warning", "notice", "info", "debug"
 };
 
+static constexpr int DEFAULT_OSC_PORT = 7100;
+
 ConfigurationManager::ConfigurationManager()
     : midiPort_("Midi Through Port-0")
     , logLevel_("info")
     , confPath_("/etc/cuems")
-    , nngUrl_("tcp://127.0.0.1:9093")
+    , oscPort_(DEFAULT_OSC_PORT)
     , nodeName_("")
 {
+    // Resolution order for oscPort_: CLI flag > env var > default 7100.
+    // CLI flag is applied in parseArgs(); env var checked here at construction.
+    const char* envPort = std::getenv("CUEMS_GRADIENT_OSC_PORT");
+    if (envPort) {
+        int p = std::atoi(envPort);
+        if (p > 0 && p <= 65535)
+            oscPort_ = p;
+    }
 }
 
 int ConfigurationManager::parseArgs(int argc, char** argv) {
@@ -41,7 +50,7 @@ int ConfigurationManager::parseArgs(int argc, char** argv) {
         {"midi-port",  required_argument, nullptr, 'm'},
         {"log-level",  required_argument, nullptr, 'l'},
         {"conf-path",  required_argument, nullptr, 'c'},
-        {"nng-url",    required_argument, nullptr, 'u'},
+        {"osc-port",   required_argument, nullptr, 'p'},
         {"node-name",  required_argument, nullptr, 'n'},
         {"help",       no_argument,       nullptr, 'h'},
         {"version",    no_argument,       nullptr, 'V'},
@@ -52,7 +61,7 @@ int ConfigurationManager::parseArgs(int argc, char** argv) {
     optind = 1;
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "m:l:c:u:n:hV", longOptions, nullptr)) != -1) {
+    while ((opt = getopt_long(argc, argv, "m:l:c:p:n:hV", longOptions, nullptr)) != -1) {
         switch (opt) {
             case 'm':
                 midiPort_ = optarg;
@@ -63,9 +72,15 @@ int ConfigurationManager::parseArgs(int argc, char** argv) {
             case 'c':
                 confPath_ = optarg;
                 break;
-            case 'u':
-                nngUrl_ = optarg;
+            case 'p': {
+                int p = std::atoi(optarg);
+                if (p <= 0 || p > 65535) {
+                    std::cerr << "Error: --osc-port must be 1–65535, got '" << optarg << "'" << std::endl;
+                    return 1;
+                }
+                oscPort_ = p;
                 break;
+            }
             case 'n':
                 nodeName_ = optarg;
                 break;
@@ -114,16 +129,17 @@ void ConfigurationManager::printUsage() const {
         << "                           (default: info)\n"
         << "  -c, --conf-path <path>   Path to CUEMS configuration directory\n"
         << "                           (default: /etc/cuems)\n"
-        << "  -u, --nng-url <url>      NNG bus dial URL\n"
-        << "                           (default: tcp://127.0.0.1:9093)\n"
-        << "  -n, --node-name <name>   Node name for NNG bus filtering\n"
+        << "  -p, --osc-port <port>    UDP port for OSC command input (1-65535)\n"
+        << "                           Env override: CUEMS_GRADIENT_OSC_PORT\n"
+        << "                           (default: 7100)\n"
+        << "  -n, --node-name <name>   Node name for OSC message filtering\n"
         << "                           (default: system hostname)\n"
         << "  -h, --help               Print this help message and exit\n"
         << "  -V, --version            Print version information and exit\n";
 }
 
 void ConfigurationManager::printVersion() const {
-    std::cout << VERSION_STRING << std::endl;
+    std::cout << GME_VERSION_STRING << std::endl;
 }
 
 bool ConfigurationManager::validateLogLevel() const {

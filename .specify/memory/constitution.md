@@ -1,33 +1,33 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.0.0 -> 1.1.0 (MINOR: new principle + clarifications)
+Version change: 1.2.0 -> 1.3.0 (MINOR: added Deploy-Test Scripts workflow
+  rule — codifies dev/deploy_tests/ layout, naming convention, and
+  partial-pass pattern for tasks that require daemon-level or
+  multi-process verification outside CTest).
 
-Modified principles:
-  - II. Modular Architecture — clarified gme::motion responsibility
-    (motion lifecycle + polymorphic motion types, including scalar
-    fades and future N-dimensional vector motions).
+Modified principles: None.
 
-Added principles:
-  - VII. Extensibility via Abstraction (NEW) — codifies open-closed
-    extension for motion types, curves, and transports.
+Added principles: None.
 
-Added sections: None (expanded Performance & Safety Standards with
-  a Virtual Dispatch bullet; expanded Principle II with a module
-  responsibility bullet).
+Added sections:
+  - Development Workflow — new "Deploy-Test Scripts" bullet covering:
+      * Folder: dev/deploy_tests/
+      * Naming: sNNN_tXXX_<slug>.sh / sNNN_<tool>.cpp
+      * Results: dev/deploy_tests/results/sNNN_tXXX_<slug>.txt
+      * Scope: when to use deploy-test vs CTest
+      * Partial-pass pattern for hardware-only steps
 
 Templates requiring updates:
-  - .specify/templates/plan-template.md — Constitution Check section
-    dynamically references constitution gates. No structural change
-    needed. (check: pass)
-  - .specify/templates/spec-template.md — Generic template, no
-    constitution-specific references. (check: pass)
-  - .specify/templates/tasks-template.md — Generic template, task
-    phases are project-driven. (check: pass)
-  - .specify/templates/commands/*.md — Directory does not exist.
-    (check: N/A)
+  - .specify/templates/plan-template.md — No structural change
+    needed; rule is workflow-level.
+    (check: pass)
+  - .specify/templates/spec-template.md — No constitution-specific
+    references. (check: pass)
+  - .specify/templates/tasks-template.md — No constitution-specific
+    references. (check: pass)
 
-Follow-up TODOs: None
+Follow-up TODOs: None.
 ==================
 -->
 
@@ -250,6 +250,68 @@ code.
 - **Documentation**: Public API changes MUST include updated
   docstrings per Principle VI. Behavioral changes MUST be
   reflected in relevant docs.
+- **Specification & Planning Layout**: Project documentation
+  artifacts MUST be partitioned by audience and lifecycle:
+  - `specs/NNN-feature/` — per-feature spec, plan, tasks, and
+    supporting design artifacts. Created and owned by the
+    feature branch that introduces them.
+  - `specs/planning/` — cross-cutting planning documents that
+    span multiple features (refactor roadmaps, phase handoff
+    notes, migration strategies, architectural surveys). These
+    documents are scoped to development workflow and are not
+    consumer-facing.
+  - Top-level `docs/` — reserved for end-user documentation
+    and generated API reference output (Doxygen or equivalent,
+    per Principle VI). Hand-written development planning
+    artifacts MUST NOT live here, to prevent collisions with
+    auto-generated content and to keep the user-facing
+    surface coherent.
+
+  *Rationale*: Mixing dev-internal planning with generated
+  API docs forces tooling and consumers to filter intent-mixed
+  content. Clear partitioning lets each audience (feature
+  authors, cross-feature planners, library consumers) reach
+  what they need without sifting through artifacts addressed
+  to someone else.
+
+- **Deploy-Test Scripts**: Tasks that require daemon-level orchestration,
+  multi-process coordination, or deployment-path verification and cannot
+  be expressed as CTest targets MUST be implemented as Bash scripts in
+  `dev/deploy_tests/`.
+
+  **Naming convention**: `sNNN_tXXX_<slug>.sh`, where `NNN` is the
+  zero-padded spec number and `XXX` is the zero-padded task ID from
+  `tasks.md` (e.g., `s007_t034_smoke.sh`). Support tools written in
+  C++ (e.g., OSC CLI senders) follow the same spec prefix:
+  `sNNN_<tool>.cpp`.
+
+  **Results**: Each script MUST write its output to
+  `dev/deploy_tests/results/sNNN_tXXX_<slug>.txt`. Scripts MUST exit
+  0 on pass and 1 on failure, and MUST print a `RESULT: PASS` /
+  `RESULT: FAIL` summary line so CI or a reviewer can scan at a
+  glance. Pre-captured results (e.g., journal extracts from one-off
+  hardware runs) MUST be committed alongside the script.
+
+  **Scope**: A deploy-test script is appropriate when the verification
+  requires: (a) starting the real daemon binary, (b) sending network
+  traffic (OSC, UDP), (c) multi-daemon orchestration, (d) journal
+  inspection, or (e) hardware/environment conditions that CTest cannot
+  replicate (Avahi stopped, closed ports, MTC source absent). Pure
+  unit and integration tests that can run in the build sandbox belong
+  in `tests/` as CTest targets per Principle III.
+
+  **Partial-pass pattern**: When a task has a dev-host-verifiable
+  portion and a hardware-only portion (e.g., requires a live MTC
+  source on node-002), the script MUST run the dev-host portion and
+  exit 0 with a `SKIP:` annotation for the hardware-only steps,
+  accompanied by explicit reproduction instructions in the script.
+
+  *Rationale*: Not all acceptance criteria can be expressed as
+  hermetic CTest targets. Codifying the folder, naming, and output
+  conventions prevents each feature from inventing its own
+  verification layout, keeps deploy artifacts discoverable across
+  specs, and makes it unambiguous which tasks have been verified and
+  which require hardware.
 
 ## Governance
 
@@ -276,4 +338,4 @@ against these principles. Violations MUST be resolved before
 merge or explicitly justified in the Complexity Tracking
 section of the implementation plan.
 
-**Version**: 1.1.0 | **Ratified**: 2026-04-10 | **Last Amended**: 2026-04-23
+**Version**: 1.3.0 | **Ratified**: 2026-04-10 | **Last Amended**: 2026-05-13
