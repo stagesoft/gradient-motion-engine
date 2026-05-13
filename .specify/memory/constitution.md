@@ -1,36 +1,31 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.1.0 -> 1.2.0 (MINOR: materially expanded Development
-  Workflow guidance — codifies the on-disk layout for specification
-  and planning artifacts).
+Version change: 1.2.0 -> 1.3.0 (MINOR: added Deploy-Test Scripts workflow
+  rule — codifies dev/deploy_tests/ layout, naming convention, and
+  partial-pass pattern for tasks that require daemon-level or
+  multi-process verification outside CTest).
 
 Modified principles: None.
 
 Added principles: None.
 
 Added sections:
-  - Development Workflow — new "Specification & Planning Layout"
-    bullet establishing three locations:
-      * `specs/NNN-feature/` for per-feature spec/plan/tasks
-        artifacts.
-      * `specs/planning/` for cross-cutting planning documents
-        that span multiple features (refactor plans, phase
-        handoff notes, migration strategies).
-      * Top-level `docs/` reserved for end-user documentation and
-        generated API output (per Principle VI), to prevent
-        collisions with Doxygen-style toolchains.
+  - Development Workflow — new "Deploy-Test Scripts" bullet covering:
+      * Folder: dev/deploy_tests/
+      * Naming: sNNN_tXXX_<slug>.sh / sNNN_<tool>.cpp
+      * Results: dev/deploy_tests/results/sNNN_tXXX_<slug>.txt
+      * Scope: when to use deploy-test vs CTest
+      * Partial-pass pattern for hardware-only steps
 
 Templates requiring updates:
   - .specify/templates/plan-template.md — No structural change
-    needed; layout rule is workflow-level, not gate-level.
+    needed; rule is workflow-level.
     (check: pass)
   - .specify/templates/spec-template.md — No constitution-specific
     references. (check: pass)
   - .specify/templates/tasks-template.md — No constitution-specific
     references. (check: pass)
-  - .specify/templates/commands/*.md — Directory does not exist.
-    (check: N/A)
 
 Follow-up TODOs: None.
 ==================
@@ -279,6 +274,45 @@ code.
   what they need without sifting through artifacts addressed
   to someone else.
 
+- **Deploy-Test Scripts**: Tasks that require daemon-level orchestration,
+  multi-process coordination, or deployment-path verification and cannot
+  be expressed as CTest targets MUST be implemented as Bash scripts in
+  `dev/deploy_tests/`.
+
+  **Naming convention**: `sNNN_tXXX_<slug>.sh`, where `NNN` is the
+  zero-padded spec number and `XXX` is the zero-padded task ID from
+  `tasks.md` (e.g., `s007_t034_smoke.sh`). Support tools written in
+  C++ (e.g., OSC CLI senders) follow the same spec prefix:
+  `sNNN_<tool>.cpp`.
+
+  **Results**: Each script MUST write its output to
+  `dev/deploy_tests/results/sNNN_tXXX_<slug>.txt`. Scripts MUST exit
+  0 on pass and 1 on failure, and MUST print a `RESULT: PASS` /
+  `RESULT: FAIL` summary line so CI or a reviewer can scan at a
+  glance. Pre-captured results (e.g., journal extracts from one-off
+  hardware runs) MUST be committed alongside the script.
+
+  **Scope**: A deploy-test script is appropriate when the verification
+  requires: (a) starting the real daemon binary, (b) sending network
+  traffic (OSC, UDP), (c) multi-daemon orchestration, (d) journal
+  inspection, or (e) hardware/environment conditions that CTest cannot
+  replicate (Avahi stopped, closed ports, MTC source absent). Pure
+  unit and integration tests that can run in the build sandbox belong
+  in `tests/` as CTest targets per Principle III.
+
+  **Partial-pass pattern**: When a task has a dev-host-verifiable
+  portion and a hardware-only portion (e.g., requires a live MTC
+  source on node-002), the script MUST run the dev-host portion and
+  exit 0 with a `SKIP:` annotation for the hardware-only steps,
+  accompanied by explicit reproduction instructions in the script.
+
+  *Rationale*: Not all acceptance criteria can be expressed as
+  hermetic CTest targets. Codifying the folder, naming, and output
+  conventions prevents each feature from inventing its own
+  verification layout, keeps deploy artifacts discoverable across
+  specs, and makes it unambiguous which tasks have been verified and
+  which require hardware.
+
 ## Governance
 
 This constitution is the authoritative source of project-wide
@@ -304,4 +338,4 @@ against these principles. Violations MUST be resolved before
 merge or explicitly justified in the Complexity Tracking
 section of the implementation plan.
 
-**Version**: 1.2.0 | **Ratified**: 2026-04-10 | **Last Amended**: 2026-05-13
+**Version**: 1.3.0 | **Ratified**: 2026-04-10 | **Last Amended**: 2026-05-13
