@@ -1,33 +1,38 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.0.0 -> 1.1.0 (MINOR: new principle + clarifications)
+Version change: 1.1.0 -> 1.2.0 (MINOR: materially expanded Development
+  Workflow guidance — codifies the on-disk layout for specification
+  and planning artifacts).
 
-Modified principles:
-  - II. Modular Architecture — clarified gme::motion responsibility
-    (motion lifecycle + polymorphic motion types, including scalar
-    fades and future N-dimensional vector motions).
+Modified principles: None.
 
-Added principles:
-  - VII. Extensibility via Abstraction (NEW) — codifies open-closed
-    extension for motion types, curves, and transports.
+Added principles: None.
 
-Added sections: None (expanded Performance & Safety Standards with
-  a Virtual Dispatch bullet; expanded Principle II with a module
-  responsibility bullet).
+Added sections:
+  - Development Workflow — new "Specification & Planning Layout"
+    bullet establishing three locations:
+      * `specs/NNN-feature/` for per-feature spec/plan/tasks
+        artifacts.
+      * `specs/planning/` for cross-cutting planning documents
+        that span multiple features (refactor plans, phase
+        handoff notes, migration strategies).
+      * Top-level `docs/` reserved for end-user documentation and
+        generated API output (per Principle VI), to prevent
+        collisions with Doxygen-style toolchains.
 
 Templates requiring updates:
-  - .specify/templates/plan-template.md — Constitution Check section
-    dynamically references constitution gates. No structural change
-    needed. (check: pass)
-  - .specify/templates/spec-template.md — Generic template, no
-    constitution-specific references. (check: pass)
-  - .specify/templates/tasks-template.md — Generic template, task
-    phases are project-driven. (check: pass)
+  - .specify/templates/plan-template.md — No structural change
+    needed; layout rule is workflow-level, not gate-level.
+    (check: pass)
+  - .specify/templates/spec-template.md — No constitution-specific
+    references. (check: pass)
+  - .specify/templates/tasks-template.md — No constitution-specific
+    references. (check: pass)
   - .specify/templates/commands/*.md — Directory does not exist.
     (check: N/A)
 
-Follow-up TODOs: None
+Follow-up TODOs: None.
 ==================
 -->
 
@@ -250,6 +255,29 @@ code.
 - **Documentation**: Public API changes MUST include updated
   docstrings per Principle VI. Behavioral changes MUST be
   reflected in relevant docs.
+- **Specification & Planning Layout**: Project documentation
+  artifacts MUST be partitioned by audience and lifecycle:
+  - `specs/NNN-feature/` — per-feature spec, plan, tasks, and
+    supporting design artifacts. Created and owned by the
+    feature branch that introduces them.
+  - `specs/planning/` — cross-cutting planning documents that
+    span multiple features (refactor roadmaps, phase handoff
+    notes, migration strategies, architectural surveys). These
+    documents are scoped to development workflow and are not
+    consumer-facing.
+  - Top-level `docs/` — reserved for end-user documentation
+    and generated API reference output (Doxygen or equivalent,
+    per Principle VI). Hand-written development planning
+    artifacts MUST NOT live here, to prevent collisions with
+    auto-generated content and to keep the user-facing
+    surface coherent.
+
+  *Rationale*: Mixing dev-internal planning with generated
+  API docs forces tooling and consumers to filter intent-mixed
+  content. Clear partitioning lets each audience (feature
+  authors, cross-feature planners, library consumers) reach
+  what they need without sifting through artifacts addressed
+  to someone else.
 
 ## Governance
 
@@ -276,4 +304,4 @@ against these principles. Violations MUST be resolved before
 merge or explicitly justified in the Complexity Tracking
 section of the implementation plan.
 
-**Version**: 1.1.0 | **Ratified**: 2026-04-10 | **Last Amended**: 2026-04-23
+**Version**: 1.2.0 | **Ratified**: 2026-04-10 | **Last Amended**: 2026-05-13
