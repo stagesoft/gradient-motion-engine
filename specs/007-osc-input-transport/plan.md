@@ -18,10 +18,10 @@ Replace the daemon's NNG bus-client inbound command path with a localhost UDP OS
 **Primary Dependencies**: `liblo` (now used on both sender and server sides — already linked), `nlohmann-json` (curve_params parsing, unchanged), `mtcreceiver` submodule pinned at `59fc76e` (unchanged), `cuemslogger` (unchanged). **Removed**: `libnng` / `libnng-dev`.
 **Storage**: N/A — all state in-memory. The OSC server reuses the existing fixed-size `LockFreeQueue<FadeCommand, 64>` for handoff to the tick thread.
 **Testing**: `ctest` against the project's existing GoogleTest harness. New tests: `tests/test_osc_parse.cpp` (parse-level), `tests/test_osc_server_integration.cpp` (loopback wire smoke). Deleted: `tests/test_nng_parse.cpp`, `tests/test_nng_integration.cpp`.
-**Target Platform**: Debian 13 / Ubuntu 24.04 server (systemd-managed daemon). Same as Phase 3.
+**Target Platform**: Debian 13 / Ubuntu 24.04 server (systemd-managed daemon). Same as feature 005.
 **Project Type**: Single C++ project — `libgradient_motion` (core library) + `gradient-motiond` (thin daemon consumer). Constitution Principle III holds.
-**Performance Goals**: Sub-millisecond per-command latency from `lo_send` on the local NodeEngine side to `LockFreeQueue::push` on the daemon side (spec SC-002). Per-tick OSC output budget unchanged from Phase 6 (< 1 ms per pipeline tick, Constitution §"Performance & Safety Standards").
-**Constraints**: Loopback-only bind (FR-002). Zero heap allocations in the tick-thread consumer path (Constitution Principle IV) — the OSC server thread is the producer and may allocate for `nlohmann::json::parse` on `curve_params_json`, same as the Phase 3 NNG path. Daemon shutdown must complete within 2 s (Constitution §"Performance & Safety Standards").
+**Performance Goals**: Sub-millisecond per-command latency from `lo_send` on the local NodeEngine side to `LockFreeQueue::push` on the daemon side (spec SC-002). Per-tick OSC output budget unchanged from feature 006 (< 1 ms per pipeline tick, Constitution §"Performance & Safety Standards").
+**Constraints**: Loopback-only bind (FR-002). Zero heap allocations in the tick-thread consumer path (Constitution Principle IV) — the OSC server thread is the producer and may allocate for `nlohmann::json::parse` on `curve_params_json`, same as the feature 005 NNG path. Daemon shutdown must complete within 2 s (Constitution §"Performance & Safety Standards").
 **Scale/Scope**: Single-node deployment (the daemon and its NodeEngine always colocate). ~64 in-flight motions max (queue capacity). Source diff: roughly +600 / –600 lines centered on `daemon/comms/` and `tests/`.
 
 ## Constitution Check
@@ -35,7 +35,7 @@ The constitution version at planning time is **1.2.0** (ratified 2026-04-10, las
 | **I. Deterministic Evaluation** | PASS | Evaluation is read from the lock-free queue. Producer side change (NNG-thread → liblo-thread) does not feed back into evaluation. Transport-layer jitter remains transport-layer jitter (Principle I bullet 3). |
 | **II. Modular Architecture** | PASS, IMPROVED | `gme::signal` keeps `FadeCommand`+`LockFreeQueue`+`ParseResult` enum. New parser `parseFadeOscCommand` is added in `gme::signal` (not `daemon/comms`), keeping the wire-format parse logic library-side. The `OscServer` wrapper lives in `daemon/comms` and is daemon-only — it knows about transport mechanics but not about motion logic. No circular dependencies introduced. |
 | **III. Library-First** | PASS, IMPROVED | NNG dependency leaves the library's transitive closure entirely. liblo was already a library dep on the sender side; reusing it on the receiver side does not increase the library's external surface. The daemon binary continues to be a thin consumer. |
-| **IV. Real-Time Safety** | PASS | Tick-thread hot path is unchanged. OSC producer thread is wait-free wrt the tick thread (SPSC `LockFreeQueue::push`). Producer-thread allocations (json parse) are tolerated, same as Phase 3. |
+| **IV. Real-Time Safety** | PASS | Tick-thread hot path is unchanged. OSC producer thread is wait-free wrt the tick thread (SPSC `LockFreeQueue::push`). Producer-thread allocations (json parse) are tolerated, same as feature 005. |
 | **V. Protocol-Agnostic Core** | PASS, STRENGTHENED | Evaluation and motion logic remain transport-independent. After Phase H lands, the library compiles and links without any wire-format-specific dependency (`gme::signal::FadeCommand` is a pure record; the parsers — JSON and OSC — are separate translation units). |
 | **VI. Documentation Standards** | PASS, REQUIRES IMPLEMENTATION CARE | New public headers (`OscServer.h`, `parseFadeOscCommand.h`) ship with complete docstrings per the contract files in [`contracts/`](contracts/). Doxygen build on CI must remain warning-free — verified during implementation. |
 | **VII. Extensibility via Abstraction** | PASS | `IMotion` hierarchy and `CurveFactory` are not touched. The OSC namespace `/gradient/*` is open to future commands (`start_crossfade`, `start_vector`) without altering the parser's existing-command paths. |
@@ -67,7 +67,7 @@ specs/007-osc-input-transport/
 
 ### Source Code (repository root)
 
-Single C++ project, no frontend / backend split. The directories below are the **existing** layout from Phases 1–6; Phase H modifies a small subset of them.
+Single C++ project, no frontend / backend split. The directories below are the **existing** layout from features 001–006; Phase H modifies a small subset of them.
 
 ```text
 src/

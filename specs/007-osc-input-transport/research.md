@@ -15,18 +15,18 @@ This document collects the decisions that the Phase H planning notes already pre
 
 ## Decision 1 — OSC library for the server side: **liblo (existing dependency)**
 
-**Decision**: Use `liblo` for receiving OSC commands in the daemon, via `lo_server_thread_new` (or `lo_server_new` + a manually-driven thread). Do **not** add `oscpack` as a new build dependency.
+**Decision**: Use `liblo` for receiving OSC commands in the daemon, via `lo_server_thread_new_from_url("osc.udp://127.0.0.1:<port>/", err_handler)` (see Implementation Notes below for the locked API). Do **not** add `oscpack` as a new build dependency, now or in the future.
 
 **Rationale**:
 
 - `liblo` is already linked into the daemon and `libgradient_motion` for the output side (`gme::osc::OscSender` calls `lo_send`). Server-mode support (`lo_server_thread`, `lo_server_add_method`) is part of the same library.
-- The Phase H planning note (`specs/planning/phase-h-osc-refactor-plan.md` H.2) suggested `oscpack` to "reuse the pattern from `cuems-audioplayer/src/oscreceiver/oscreceiver.cpp`". The *pattern* (localhost UDP listener with per-address method dispatch) is library-agnostic — `liblo` implements it natively and is already in our build graph.
+- An early draft of the Phase H planning note mentioned `oscpack` as a possible receiver library; that mention is superseded by this decision. `oscpack` will not be introduced. The transport *pattern* used by the sibling CUEMS players (localhost UDP listener with per-address method dispatch) is library-agnostic — `liblo` implements it natively and is already in our build graph, so reusing it on the receive side is the obvious choice.
 - Adding `oscpack` would mean one more `Build-Depends` line in `debian/control` and one more transitive dependency for embedders of `libgradient_motion`. Constitution Principle III (Library-First) prefers fewer external dependencies on the library side.
 - `liblo` server-mode supports per-address method registration (`lo_server_add_method("/gradient/start_fade", "...", cb, ctx)`), bound type-tag matching, and explicit per-method context pointers — all the features the daemon needs.
 
 **Alternatives considered**:
 
-- `oscpack` — rejected; would add a build dependency for no functional gain.
+- `oscpack` — rejected and **not used anywhere in this project, now or in the future**. The library is unmaintained (last upstream activity years stale) and would add a build dependency for no functional gain over the already-linked liblo. Every other CUEMS player and tool uses liblo; aligning the gradient daemon's receive side keeps the dependency footprint coherent across the ecosystem.
 - A hand-written UDP receiver + custom OSC parser — rejected; reinventing the wheel and creates a second OSC parser path inside the project. Maintenance hazard.
 - Async I/O via `boost::asio` — rejected; pulls in Boost just for a localhost UDP listener.
 
@@ -34,7 +34,8 @@ This document collects the decisions that the Phase H planning notes already pre
 
 - The receive callback runs on `liblo`'s server thread (network thread). It must be wait-free with respect to the tick thread — i.e. it pushes parsed `FadeCommand` records into a `LockFreeQueue<FadeCommand, 64>` and returns immediately. No mutex acquisition, no allocation in the hot path beyond what `nlohmann::json` does for `curve_params` (same as the existing NNG path).
 - The server thread is owned by an `OscServer` wrapper class in `daemon/comms/OscServer.{cpp,h}` and joined cleanly on daemon shutdown.
-- Bind address: `127.0.0.1` only. Pass `"127.0.0.1"` as the `iface` argument to `lo_server_thread_new_multicast_iface` or equivalent; for a pure UDP server, use `lo_server_thread_new()` with a port and rely on the OS-level bind to localhost via `setsockopt(IPV6_V6ONLY)` / explicit `bind()` if liblo's default is too permissive. **Validate at implementation time** that `liblo` actually binds only to loopback under the chosen API — if it does not, fall back to creating the socket manually and handing it to liblo. (Recorded as an implementation-validation task, not a spec gap.)
+- **Bind API — locked**: use `lo_server_thread_new_from_url("osc.udp://127.0.0.1:<port>/", err_handler)`. liblo's URL-form constructor parses the host part and passes it to `getaddrinfo`, which resolves `127.0.0.1` to the loopback interface; the resulting socket is then `bind(2)`-ed to that address rather than `INADDR_ANY`. The plain `lo_server_thread_new(port, err_handler)` constructor binds to `0.0.0.0` and is **not** used. This is the same idiom that the other CUEMS Plane-2 players (`cuems-audioplayer`, `cuems-videocomposer`, `cuems-dmxplayer`) follow for their localhost-only OSC sockets. No manual socket fallback is needed.
+- The implementation MUST still log the resolved bind address at INFO level on startup so an operator can confirm (`ss -ulnp | grep <port>` should show `127.0.0.1:<port>`, not `0.0.0.0:<port>`).
 
 ---
 
@@ -75,9 +76,9 @@ This document collects the decisions that the Phase H planning notes already pre
 
 **Rationale**:
 
-- Spec 007 explicitly carves Phase 7 crossfade dispatch out of scope (spec §"Out of scope for this feature").
+- Spec 007 explicitly carves the future crossfade dispatch out of scope (spec §"Out of scope for this feature").
 - The OSC argument format trivially scales to a crossfade via `/gradient/start_crossfade` with a paired argument list; adding it later is purely additive and does not affect any code shipped in Phase H.
-- The existing `FadeCommand::Type::START_CROSSFADE` enum and `partner_*` fields in `src/signal/FadeCommand.h` are kept as-is. They sit dormant until Phase 7.
+- The existing `FadeCommand::Type::START_CROSSFADE` enum and `partner_*` fields in `src/signal/FadeCommand.h` are kept as-is. They sit dormant until the future crossfade feature.
 
 **Alternative**: include the crossfade address now. Rejected — increases test surface and review surface in a feature whose primary goal is the transport flip, not new functionality.
 
@@ -89,7 +90,7 @@ This document collects the decisions that the Phase H planning notes already pre
 
 **Rationale**:
 
-- The C++ side's `FadeCommand.start_mtc_ms` is `uint64_t` (confirmed against feature 005's `FadeCommand.h` contract: required field documented without an explicit width, but the in-memory representation chosen at Phase 3 was 64-bit unsigned to absorb the 24-hour MTC rollover counter that cuems-engine threads through `frozen_mtc_ms`).
+- The C++ side's `FadeCommand.start_mtc_ms` is `uint64_t` (confirmed against feature 005's `FadeCommand.h` contract: required field documented without an explicit width, but the in-memory representation chosen at the time was 64-bit unsigned to absorb the 24-hour MTC rollover counter that cuems-engine threads through `frozen_mtc_ms`).
 - A 24-hour MTC range fits inside int32 (~86.4 M ms), so int32 is technically sufficient for *one* day. But cuems-engine deals with MTC absolute timestamps that can exceed 24h (rc6 added rollover-aware timecode; the value is monotonic across the engine's runtime). Choosing int64 on the wire matches the in-memory width and removes a future overflow trap.
 - All other ms fields (`duration_ms`) stay int32 (`i`). A fade longer than 24 days is implausible and the existing FadeMotion accepts `uint32_t` for duration.
 
@@ -105,7 +106,7 @@ This document collects the decisions that the Phase H planning notes already pre
 - **Add** `--osc-port <port>` (default `7100`).
 - **Add** environment-variable override `CUEMS_GRADIENT_OSC_PORT` consulted only if `--osc-port` is not given.
 - **Keep** `--node-name <name>` (already present; still required for the filter in FR-004).
-- **Keep** the existing config-file mechanism (Phase 3 daemon reads from `/etc/cuems/settings.xml`'s `<gradient_osc_port>` element via the existing `Config` class) and document the resolution order: CLI flag > env var > settings.xml > built-in default 7100.
+- **Keep** the existing config-file mechanism (the feature 005 daemon already reads from `/etc/cuems/settings.xml` via the `Config` class; this feature adds the new `<gradient_osc_port>` element under `<node>` to that reader) and document the resolution order: CLI flag > env var > settings.xml > built-in default 7100.
 
 **Rationale**:
 
@@ -128,7 +129,7 @@ This document collects the decisions that the Phase H planning notes already pre
 **Rationale**:
 
 - Spec FR-008 forbids network status. The status queue exists *only* to feed network status. Keeping it as dead code (for "maybe future use") violates Constitution Principle III (Library-First — the library should not carry dead infrastructure).
-- Future fade-progress UI work lives in cuems-engine's `loop_fadeCue`, not in the daemon (spec §"User Story 4", FR-015).
+- Future fade-progress UI work lives in cuems-engine's `loop_fadeCue`, not in the daemon (spec §"User Story 4" and §"Out of scope — NodeEngine ownership of fade lifecycle reporting").
 - Local logs are visible to operators via journalctl and to developers via `cuems-gradient-motiond --log-level debug` (existing CLI option). No UX regression.
 
 **Alternative**: keep `StatusEmitRequest` and the queue, just disable the network emit. Rejected — leaves a confusing half-feature.
@@ -160,7 +161,7 @@ This document collects the decisions that the Phase H planning notes already pre
 - **Delete** `tests/test_nng_integration.cpp` and `tests/test_nng_parse.cpp`.
 - **Add** `tests/test_osc_parse.cpp` covering:
   - Well-formed `/gradient/start_fade` → `FadeCommand{Type::START_FADE, …}`.
-  - Well-formed `/gradient/cancel_motion` → `FadeCommand{Type::CANCEL_FADE, motion_id, …}`.
+  - Well-formed `/gradient/cancel_motion` → `FadeCommand{Type::CANCEL_MOTION, motion_id, …}`.
   - Well-formed `/gradient/cancel_all` → `FadeCommand{Type::CANCEL_ALL, …}`.
   - Type-tag mismatch (e.g. `start_fade` with `,sssisffffss` instead of `,sssisffhisss`) → `TypeError`.
   - Wrong argument count → `MissingField`.
@@ -188,7 +189,7 @@ This document collects the decisions that the Phase H planning notes already pre
 - `debian/control` Depends (runtime): **drop** `libnng1` (or whatever NNG runtime SO version the current package depends on). `liblo7` (or current SO version) stays.
 - The systemd unit `cuems-gradient-motiond.service` lives in `cuems-common`, not this repo. The packaging change there is tracked by the corresponding cuems-engine-side branch (`feat/gradient-osc-transport`). The C++ side delivers the daemon binary; the system integration is rolled in the deb produced from this branch.
 
-**Rationale**: Spec FR-016 requires no libnng runtime dependency. The packaging skeleton is the enforcement point.
+**Rationale**: Spec FR-012 requires no libnng runtime dependency. The packaging skeleton is the enforcement point.
 
 **Alternative**: leave libnng in the package as "transitional". Rejected — Spec SC-004 is explicit.
 
@@ -206,10 +207,11 @@ This document collects the decisions that the Phase H planning notes already pre
 
 These are decisions that are locked at the spec level but require verification at implementation time. They are not unresolved — they are checklist items for the implementer.
 
-1. **Confirm `liblo` server-mode bind is restricted to `127.0.0.1`** under the chosen API. If not, build the UDP socket manually and attach it.
-2. **Confirm `liblo`'s server thread is signal-safe** with respect to SIGTERM cleanup (`lo_server_thread_free` joins the thread). If `lo_server_thread_free` blocks, switch to a manually-pumped `lo_server` running in a `std::thread` we own.
-3. **Measure** the per-command latency from `lo_send` (Python side, NodeEngine) to the daemon's queue push, to verify spec SC-002 (< 1 ms). The existing `gettimeofday`-based timing harness in `dev/` is adequate.
-4. **Verify** the daemon binary has no libnng dynamic-link dependency after the cleanup (`ldd build/gradient-motiond | grep -i nng` → empty), per spec SC-004.
+1. **Confirm `liblo`'s server thread is signal-safe** with respect to SIGTERM cleanup (`lo_server_thread_free` joins the thread). If `lo_server_thread_free` blocks past the 2-second shutdown budget, switch to a manually-pumped `lo_server` running in a `std::thread` we own. Tracked by the SIGTERM tasks in the User Story 2 implementation block.
+2. **Measure** the per-command latency from `lo_send` (Python side, NodeEngine) to the daemon's queue push, to verify spec SC-002 (< 1 ms). The existing `gettimeofday`-based timing harness in `dev/` is adequate. Tracked by the dedicated Polish task added in `tasks.md`.
+3. **Verify** the daemon binary has no libnng dynamic-link dependency after the cleanup (`ldd build/gradient-motiond | grep -i nng` → empty), per spec SC-004. Tracked by the dedicated Polish task in `tasks.md`.
+
+(The original "validate liblo bind is loopback-only" item is now closed — see Decision 1 Implementation Notes for the resolved API choice.)
 
 ---
 

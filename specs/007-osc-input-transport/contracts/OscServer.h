@@ -21,6 +21,7 @@
 #include "signal/LockFreeQueue.h"
 
 namespace gme {
+namespace daemon {
 namespace comms {
 
 /**
@@ -74,7 +75,7 @@ namespace comms {
  * @par Example usage:
  * @code
  *   gme::signal::LockFreeQueue<gme::signal::FadeCommand, 64> queue;
- *   gme::comms::OscServer server(7100, "node-002", &queue);
+ *   gme::daemon::comms::OscServer server(7100, "node-002", &queue);
  *   if (!server.start()) {
  *       // bind failed — abort startup
  *       return 1;
@@ -150,4 +151,5 @@ private:
 };
 
 }  // namespace comms
+}  // namespace daemon
 }  // namespace gme

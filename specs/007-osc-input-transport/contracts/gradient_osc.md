@@ -60,7 +60,7 @@ Eleven arguments. Order is positional and fixed.
 ### Semantics
 
 - **Supersede**: if a fade with the same `motion_id` is already active, the daemon's `MotionRegistry::addMotion` replaces it (existing supersede semantics from feature 006). The old fade's last-sent value is held; the new fade begins evaluation at its own `start_mtc_ms`.
-- **Late arrival**: same behavior as Phase 3 — if `start_mtc_ms` has already elapsed, the registry's existing tick-loop handles the late case (clamps to the curve's late position).
+- **Late arrival**: same behavior as feature 005 — if `start_mtc_ms` has already elapsed, the registry's existing tick-loop handles the late case (clamps to the curve's late position).
 - **Reject conditions** (per Decision 7 / parser contract):
   - Type tag does not match `,sssisffhisss` → `TypeError`, drop, log warning naming the offending arg index.
   - `node_name` (arg 1) does not match the daemon's `--node-name` → `NodeMismatch`, drop, log debug only.
@@ -124,7 +124,7 @@ Args:    "fade-7a3c1"  "node-002"
 ### Semantics
 
 - Every active fade in the daemon's registry is removed. All target parameters held at their last-sent values.
-- Used by NodeEngine on STOP and on LOAD (FR-013).
+- Used by NodeEngine on STOP and on LOAD (the NodeEngine-side dispatch is tracked in the cuems-engine companion repo per spec §"Out of scope").
 - Daemon shutdown (SIGTERM/SIGINT) is internally treated as `cancel_all` (FR-011); operators do not need to send this explicitly.
 
 ### Example
@@ -140,12 +140,12 @@ Args:    "node-002"
 - The wire format has no embedded version field. v1 is locked by this document.
 - v2 messages MUST use a new address or extend `start_fade` with additional **trailing** arguments. New trailing args MUST be optional from the daemon's perspective (i.e. the daemon SHOULD accept v1's argument count via partial type-tag match). This is deferred — Phase H ships strict-equal type-tag matching only.
 - Unknown OSC addresses delivered to the daemon's port are logged at debug level and dropped (default liblo behavior is to ignore them; explicit catch-all method registration is not added in Phase H).
-- Unknown keys inside `curve_params_json` are silently ignored (forward-compatibility with new curve types — same rule as Phase 3, FR-014 in spec 005).
+- Unknown keys inside `curve_params_json` are silently ignored (forward-compatibility with new curve types — same rule as feature 005, FR-014 in its spec).
 
 ## Out-of-scope wire shapes (deferred)
 
 The following addresses are **not** part of the Phase H contract. They are listed here so the namespace stays reserved for them:
 
-- `/gradient/start_crossfade` — Phase 7. Argument list: `start_fade` args plus a paired set with `partner_*` prefix.
+- `/gradient/start_crossfade` — future crossfade feature. Argument list: `start_fade` args plus a paired set with `partner_*` prefix.
 - `/gradient/start_vector` — future N-dimensional motions (`VectorMotion<2..4>`). Argument list: TBD when those motions are designed.
 - Any reverse-direction `/gradient/status/*` messages — explicitly out of scope (spec FR-008). Fade lifecycle is reported by NodeEngine's `loop_fadeCue` in cuems-engine, not by the daemon.

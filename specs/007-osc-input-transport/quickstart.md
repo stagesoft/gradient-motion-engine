@@ -182,7 +182,7 @@ sudo systemctl restart cuems-gradient-motiond
 journalctl -u cuems-gradient-motiond -n 50
 ```
 
-The daemon must come up cleanly with no Avahi errors and no waits. Re-run the fade-test GO; it must still play correctly. Validates **FR-007 / FR-017**.
+The daemon must come up cleanly with no Avahi errors and no waits. Re-run the fade-test GO; it must still play correctly. Validates **FR-007 / FR-013**.
 
 ## 6. Verify spec 005 is marked superseded
 
@@ -190,7 +190,7 @@ The daemon must come up cleanly with no Avahi errors and no waits. Re-run the fa
 head -n 30 specs/005-nng-bus-client/spec.md
 ```
 
-Expect a `Superseded by` line pointing to `specs/007-osc-input-transport/spec.md` and an explanatory block listing which sub-elements of 005 remain valid (FadeCommand struct, LockFreeQueue, node_name filter, shutdown contract) versus invalidated (NNG dial / listener wiring, status envelope, `target: "gradientengine"` shape). Validates **FR-019 / SC-007**.
+Expect a `Superseded by` line pointing to `specs/007-osc-input-transport/spec.md` and an explanatory block listing which sub-elements of 005 remain valid (FadeCommand struct, LockFreeQueue, node_name filter, shutdown contract) versus invalidated (NNG dial / listener wiring, status envelope, `target: "gradientengine"` shape). Validates **FR-015 / SC-007**.
 
 ## 7. Cleanup
 
@@ -209,10 +209,10 @@ rm /tmp/smoke.py
 | FR-003 | Three-message command set works | step 4 |
 | FR-004 | `node_name` filter drops cross-node traffic | step 4 negative |
 | FR-006 | Malformed messages do not crash the daemon | step 4 negative |
-| FR-007 / FR-017 | Daemon starts with Avahi stopped | step 5 optional |
+| FR-007 / FR-013 | Daemon starts with Avahi stopped | step 5 optional |
 | FR-008 | No status broadcasts emitted | inspect: no outbound packets on any non-volmaster socket |
-| FR-016 | No libnng runtime dep on binary | step 1 (`ldd`) |
-| FR-019 | Spec 005 marked superseded | step 6 |
+| FR-012 | No libnng runtime dep on binary | step 1 (`ldd`) |
+| FR-015 | Spec 005 marked superseded | step 6 |
 | SC-001 | 5 s fade on node-002 plays cleanly | step 5 |
 | SC-006 | All prior tests still green | step 2 |
 

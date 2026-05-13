@@ -43,7 +43,7 @@ A CUEMS operator loads a project with an AudioCue and a FadeCue on node-002, pre
 
 When the operator presses STOP on the running script, or loads a different project, any fades currently being evaluated by the daemon are cancelled immediately and the target parameter is held at its last-sent value. No further OSC ticks are emitted for the cancelled fades.
 
-**Why this priority**: Cancellation correctness is part of the existing contract (Phase 6 supersede / cancel semantics). The transport change must not regress it. STOP without cancellation leaves audio fading toward silence after the operator has explicitly halted the show — unacceptable.
+**Why this priority**: Cancellation correctness is part of the existing contract (feature 006 supersede / cancel semantics). The transport change must not regress it. STOP without cancellation leaves audio fading toward silence after the operator has explicitly halted the show — unacceptable.
 
 **Independent Test**: With a 30-second fade in flight, press STOP. Verify all in-flight fades stop within one tick interval and no further OSC packets are emitted to their target paths.
 
@@ -85,13 +85,13 @@ When something goes wrong with a fade — a malformed command, a curve parameter
 
 ### Edge Cases
 
-- **Late command arrival**: a fade command arrives after its scheduled `start_mtc_ms` has already passed. Daemon behavior matches existing Phase 6 semantics — the fade either starts immediately at its already-elapsed position or is rejected, whichever the existing registry implementation does today. (This refactor does not change tick-loop behavior.)
+- **Late command arrival**: a fade command arrives after its scheduled `start_mtc_ms` has already passed. Daemon behavior matches existing feature 006 semantics — the fade either starts immediately at its already-elapsed position or is rejected, whichever the existing registry implementation does today. (This refactor does not change tick-loop behavior.)
 - **Duplicate motion_id**: a fade command arrives with the same `motion_id` as one already active. Existing supersede semantics apply; the new command replaces the in-flight one.
 - **Cancel for unknown motion_id**: a cancel for an unknown motion is silently ignored.
 - **Command for a different node**: the `node_name` field does not match the daemon's configured node name. The command is dropped silently — the previous broadcast design required this filter; with localhost UDP it becomes a defense-in-depth check.
 - **Malformed command**: missing required field, wrong type, unparseable curve parameters. The command is rejected, a journal warning is emitted, and the daemon continues running.
 - **OSC port already bound**: a second daemon instance, or another process holding the configured port, prevents the daemon from binding at startup. The daemon exits with a fatal log message naming the port and the conflict.
-- **Daemon shutdown (SIGTERM/SIGINT)** with active fades: existing Phase 3 behavior is preserved — fades are treated as cancelled, target parameters are held at their last-sent value (no final OSC), and the daemon exits cleanly within 2 seconds. Status broadcasts that previously accompanied this are removed.
+- **Daemon shutdown (SIGTERM/SIGINT)** with active fades: existing feature 005 behavior is preserved — fades are treated as cancelled, target parameters are held at their last-sent value (no final OSC), and the daemon exits cleanly within 2 seconds. Status broadcasts that previously accompanied this are removed.
 
 ## Requirements *(mandatory)*
 
@@ -103,47 +103,43 @@ When something goes wrong with a fade — a malformed command, a curve parameter
 - **FR-002**: The daemon MUST listen only on the localhost interface — it MUST NOT bind to a public network interface.
 - **FR-003**: The daemon MUST support at minimum the following OSC command set: start a fade, cancel a single fade by `motion_id`, cancel all active fades.
 - **FR-004**: The daemon MUST drop commands whose `node_name` field does not match its configured node name, as a defense-in-depth filter against misrouted traffic.
-- **FR-005**: The daemon MUST deduplicate active fades by `motion_id` using the existing supersede semantics from Phase 6 — a new `start_fade` with the same `motion_id` as an active fade replaces the active fade.
+- **FR-005**: The daemon MUST deduplicate active fades by `motion_id` using the existing supersede semantics from feature 006 — a new `start_fade` with the same `motion_id` as an active fade replaces the active fade.
 - **FR-006**: The daemon MUST validate required fields and types on every incoming command, reject malformed commands without crashing, and log the rejection reason to its journal.
 - **FR-007**: The daemon MUST start successfully and bind its OSC port without requiring mDNS / Avahi name resolution or any controller hostname to be reachable.
 - **FR-008**: The daemon MUST NOT emit any status messages over the network. Fade lifecycle observation is the NodeEngine cue loop's responsibility (matching the AudioPlayer/VideoComposer/DmxPlayer pattern).
 
 **Daemon — internal handoff and behaviour preserved from earlier phases**
 
-- **FR-009**: The daemon MUST hand received commands from its network-callback thread to its tick-evaluation thread in a way that does not block the network thread and does not introduce locks in the tick path. (The existing lock-free queue used for this purpose in Phase 6 satisfies this requirement.)
+- **FR-009**: The daemon MUST hand received commands from its network-callback thread to its tick-evaluation thread in a way that does not block the network thread and does not introduce locks in the tick path. (The existing lock-free queue from feature 006 satisfies this requirement.)
 - **FR-010**: The daemon MUST preserve all motion, registry, and curve behavior previously specified in features 002 (curves), 003/004 (MTC tick source), and 006 (registry / tick loop). Only the command-intake path changes.
 - **FR-011**: The daemon MUST preserve the SIGTERM/SIGINT shutdown contract — cancel all active fades, hold target parameters at their last-sent value, do not emit a final OSC tick, exit within 2 seconds.
 
-**NodeEngine (cuems-engine) — command dispatch**
-
-- **FR-012**: The NodeEngine MUST dispatch fade commands directly to the gradient daemon on the local node via UDP OSC, without routing through the controller or any NNG bus.
-- **FR-013**: The NodeEngine MUST cancel all of the daemon's active fades when the running script is stopped and when a different project is loaded.
-- **FR-014**: The NodeEngine MUST not require the daemon to be reachable for project load or script execution to succeed — i.e., daemon-side failures (port closed, daemon crashed) MUST NOT block other cue types from playing.
-- **FR-015**: The NodeEngine MUST own fade lifecycle reporting. When a fade-progress UI surface is added in the future, the emission MUST come from the NodeEngine's fade cue loop, consistent with how audio, video, and DMX cue progress is reported.
-
 **Deployment & packaging**
 
-- **FR-016**: The daemon binary MUST NOT have a runtime dependency on libnng. The system package MUST NOT declare libnng in its runtime dependencies.
-- **FR-017**: The systemd unit for the daemon MUST NOT declare a dependency on the Avahi daemon. Daemon startup MUST succeed even when Avahi is stopped or misconfigured.
-- **FR-018**: The OSC port the daemon listens on MUST be configurable so a different node-local default can be selected if 7100 conflicts with another local service.
+- **FR-012**: The daemon binary MUST NOT have a runtime dependency on libnng. The system package MUST NOT declare libnng in its runtime dependencies.
+- **FR-013**: The systemd unit for the daemon MUST NOT declare a dependency on the Avahi daemon. Daemon startup MUST succeed even when Avahi is stopped or misconfigured.
+- **FR-014**: The OSC port the daemon listens on MUST be configurable so a different node-local default can be selected if 7100 conflicts with another local service.
 
 **Documentation & spec hygiene**
 
-- **FR-019**: The existing NNG bus client feature spec (`005-nng-bus-client`) MUST be marked as superseded by this feature for the inbound command transport, with a header pointer from the old spec to this one. Sections of feature 005 unrelated to inbound transport (the FadeCommand struct definition, the lock-free queue, the node_name filter pattern) remain referenced by features 002/003/004/006 and are not invalidated.
+- **FR-015**: The existing NNG bus client feature spec (`005-nng-bus-client`) MUST be marked as superseded by this feature for the inbound command transport, with a header pointer from the old spec to this one. Sections of feature 005 unrelated to inbound transport (the `FadeCommand` struct definition, the lock-free queue, the `node_name` filter pattern) remain referenced by features 002/003/004/006 and are not invalidated.
 
-**Out of scope for this feature** (intentionally excluded)
+**Out of scope for this feature** (intentionally excluded — tracked elsewhere)
 
-- Cross-machine fade dispatch (e.g., NodeEngine on node-A directly addressing daemon on node-B). All fades are assumed local to a single node, matching today's behavior.
-- Status emission from the daemon to the controller, frontend, or any other consumer. No CUEMS component consumes those messages today; the future fade-progress UI feature lands in the NodeEngine fade cue loop, not the daemon.
-- Phase 7 crossfade dispatch over the new transport. The command shape is compatible (a single OSC message can carry a crossfade pair) but emit-side work is a separate phase.
-- Fixing Avahi misconfiguration on node-002 for non-daemon CUEMS components. This feature removes the daemon's dependency on Avahi; engine and editor still rely on it for inter-node discovery and that is a separate task.
+- **NodeEngine-side command dispatch over OSC** — out of scope, tracked in companion repo. Resides in `cuems-engine` (branch `feat/gradient-osc-transport`) and adds a `GradientPlayer.py` modeled on `VideoPlayer.py` / `DmxPlayer.py`, rewires `_handle_fade_action` to dispatch via it, deletes the NNG send paths in `NodeCommunications`, and moves cancel-on-STOP / cancel-on-LOAD to the NodeEngine. The C++ daemon's contract assumes this work lands in lockstep.
+- **NodeEngine resilience to a missing daemon** — out of scope, tracked in companion repo. Project load and script execution must continue to succeed when the gradient daemon's port is closed or the process is crashed; this is a NodeEngine-side concern, not a C++ daemon concern.
+- **NodeEngine ownership of fade lifecycle reporting** — out of scope, tracked in companion repo. When a fade-progress UI surface is added later, the emission lives in cuems-engine's `loop_fadeCue` (matching `loop_audioCue` / `loop_videoCue` / `loop_dmxCue`), not in the C++ daemon. The daemon's role is one-way: receive commands, drive OSC sinks.
+- **`cuems-common` systemd unit edit** — tracked in companion repo (`cuems-common`). The unit file `cuems-gradient-motiond.service` must drop the `--nng-url` flag, add `--osc-port 7100`, and drop the `Wants=avahi-daemon.service` / `After=...avahi-daemon.service` lines. This is the deployment-side counterpart to FR-013.
+- **Cross-machine fade dispatch** (e.g., NodeEngine on node-A addressing daemon on node-B). All fades are assumed local to a single node, matching today's behavior.
+- **Status emission from the daemon to the controller, frontend, or any other consumer**. No CUEMS component consumes those messages today; the future fade-progress UI feature lands in the NodeEngine fade cue loop, not the daemon.
+- **Future crossfade dispatch over the new transport** (deferred to a later feature). The command shape is compatible (a single OSC message can carry a crossfade pair) but emit-side work is a separate feature.
+- **Fixing Avahi misconfiguration on node-002 for non-daemon CUEMS components**. This feature removes the daemon's dependency on Avahi; engine and editor still rely on it for inter-node discovery and that is a separate task.
 
 ### Key Entities
 
 - **Fade command (start)**: a single instruction telling the daemon to begin evaluating a fade. Carries the motion identifier, the target node name, the OSC destination of the player to drive (host, port, path), the start and end values, the scheduled MTC start time, the duration, and the curve type with its parameters. Replaces the JSON envelope previously delivered over NNG.
 - **Cancel command**: targets a single motion by `motion_id` (cancel one) or all motions (cancel all). Carries the target node name for defense-in-depth filtering.
 - **OSC server (daemon side)**: the local-port UDP listener that receives commands from the local NodeEngine, parses them into in-memory command records, and hands them to the tick-evaluation path. Replaces the NNG bus client.
-- **Gradient player (NodeEngine side)**: the new client wrapper used by NodeEngine to send commands to the local daemon, modeled after the existing video and DMX player wrappers. Replaces the NNG send paths in `NodeCommunications` and the cancel-all wrapper in `ControllerEngine`.
 
 ## Success Criteria *(mandatory)*
 
@@ -153,16 +149,16 @@ When something goes wrong with a fade — a malformed command, a curve parameter
 - **SC-002**: A fade command dispatched by the local NodeEngine is received by the daemon in under 1 millisecond on the same host, measured end-to-end from send call to parse completion.
 - **SC-003**: Daemon startup on node-002 succeeds with Avahi stopped, demonstrating no remaining dependency on hostname resolution for the gradient transport.
 - **SC-004**: The daemon's installed binary has no dynamic-link dependency on libnng, and the daemon's system package declares no libnng runtime dependency.
-- **SC-005**: On a multi-node test rig, a fade scheduled for one node produces no observable network or log activity related to that fade on any other node's daemon.
-- **SC-006**: All previously green C++ and Python unit tests for motion logic, registry, curves, and MTC tick remain green after the transport change. The new transport gains its own test coverage for command parsing, malformed-command rejection, node-name filtering, and the network-to-tick handoff.
+- **SC-005**: On a two-daemon test (two `gradient-motiond` instances running locally with distinct `--node-name` values), a fade addressed to one node produces no observable network or log activity on the other daemon — verified by `tcpdump` on the unrelated daemon's port and by inspecting its journal.
+- **SC-006**: All previously green C++ unit tests for motion logic, registry, curves, MTC tick, and the lock-free queue remain green after the transport change. The new transport gains its own test coverage for command parsing, malformed-command rejection, node-name filtering, and the network-to-tick handoff.
 - **SC-007**: The Spec Kit feature 005 spec carries a visible "Superseded by" header pointing to this feature for the inbound transport, and the new daemon retains no live code path that opens an NNG socket.
-- **SC-008**: The daemon source shrinks meaningfully when the NNG client and status-emission paths are deleted (approximately 600 lines per the planning analysis); the resulting code follows the same listener pattern used by `cuems-audioplayer` / `cuems-videocomposer` / `cuems-dmxplayer`.
+- **SC-008**: The resulting daemon uses the same transport pattern as the other CUEMS Plane-2 players (`cuems-audioplayer` / `cuems-videocomposer` / `cuems-dmxplayer`) — a localhost UDP OSC listener with per-address method dispatch — even though the chosen library may differ.
 
 ## Assumptions
 
 - The daemon and the NodeEngine that dispatches its commands always run on the same physical host (single-node-scope fades). This matches the current production design, where the fade cue and its target player cue are assumed colocated.
-- The NodeEngine knows, or can be told via configuration, the local OSC port the daemon is listening on. The chosen mechanism (entry in `settings.xml` under a node-local key, with a built-in default) mirrors how other player ports are already configured.
+- The NodeEngine knows, or can be told via configuration, the local OSC port the daemon is listening on. The chosen mechanism is a new `<gradient_osc_port>` element added under `<node>` in `/etc/cuems/settings.xml`, following the existing per-player-port pattern. The schema update lives with the cuems-utils companion change; the daemon merely reads the resolved value.
 - The default OSC port for the gradient daemon (7100) does not collide with any other CUEMS player on the same host. This is verified by reading the existing port assignments documented in the planning notes (videocomposer uses 7000, dmxplayer per-config); the default is configurable if a future player needs 7100.
-- The receiving-side OSC implementation in the daemon (`oscpack` per the planning notes — though no implementation choice is mandated by this spec) supports the same `node_name` filter, motion_id deduplication, and curve-parameter handling that the old JSON path supported.
+- The receiving-side OSC implementation in the daemon supports the same `node_name` filter, `motion_id` deduplication, and curve-parameter handling that the old JSON path supported. The chosen library is locked in the implementation plan; no `oscpack`-based receiver is contemplated now or in the future.
 - The fade-progress UI feature, when built, will emit progress from the NodeEngine's fade cue loop the same way audio and video cue progress is emitted. This feature does not preempt that work and does not need to coordinate with it.
-- The Debian packaging skeleton produced in Phase D is rebuilt against the new daemon binary; no other packaging changes are required beyond dropping `libnng-dev` from the build dependencies and adding the chosen OSC library.
+- The Debian packaging skeleton produced in Phase D is rebuilt against the new daemon binary; no other packaging changes are required beyond dropping `libnng-dev` from the build dependencies.

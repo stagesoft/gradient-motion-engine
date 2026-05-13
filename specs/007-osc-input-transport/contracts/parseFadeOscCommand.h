@@ -38,7 +38,7 @@ namespace signal {
  * for the canonical wire contract. In summary:
  *
  * - `/gradient/start_fade`     → `FadeCommand{type = START_FADE, ...}`
- * - `/gradient/cancel_motion`  → `FadeCommand{type = CANCEL_FADE, motion_id, node_name}`
+ * - `/gradient/cancel_motion`  → `FadeCommand{type = CANCEL_MOTION, motion_id, node_name}`
  * - `/gradient/cancel_all`     → `FadeCommand{type = CANCEL_ALL, node_name}`
  *
  * Any other address returns `ParseResult::MissingField` (treated as
