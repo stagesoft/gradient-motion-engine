@@ -3,13 +3,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # ***
 
-# Build Doxygen HTML and deploy to GitHub Pages when `main` is updated.
+# Build MkDocs site and deploy to GitHub Pages when `main` is updated.
 # One-time: repo Settings → Pages → Build and deployment → Source: GitHub Actions.
-name: Deploy API documentation
+name: Deploy documentation
 
 on:
   push:
     branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 concurrency:
@@ -27,30 +29,27 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: true
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            cmake \
-            doxygen \
-            g++ \
-            graphviz \
-            liblo-dev \
-            nlohmann-json3-dev \
-            libtinyxml2-dev \
-            pkg-config
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-      - name: Configure (library + docs only)
-        run: cmake -B build -DBUILD_DAEMON=OFF
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y doxygen
 
-      - name: Generate Doxygen
-        run: cmake --build build --target docs
+      - name: Install Python dependencies
+        run: pip install mkdocs==1.6.1 mkdocs-material mkdoxy
+
+      - name: Build site
+        run: mkdocs build
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: build/docs/html
+          path: site
 
   deploy:
     needs: build

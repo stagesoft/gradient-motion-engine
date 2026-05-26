@@ -63,4 +63,5 @@ First public release: timecode-driven motion and gradient evaluation with OSC ou
 * **Fade / motion path**: motion registry, fade motion implementation, and tick-aligned evaluation loop aligned with the fade-registry feature set.
 * **Tests**: unit and integration tests for curves, MTC, NNG, lock-free queue, fade/motion registry, and related behaviour.
 
+[0.3.0]: https://github.com/stagesoft/gradient-motion-engine/releases/tag/v0.3.0
 [0.1.0]: https://github.com/stagesoft/gradient-motion-engine/releases/tag/v0.1.0
