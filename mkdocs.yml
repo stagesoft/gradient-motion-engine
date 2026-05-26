@@ -1,0 +1,27 @@
+# SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+site_name: gradient-motion-engine
+repo_url: https://github.com/stagesoft/gradient-motion-engine
+theme:
+  name: material
+
+plugins:
+  - search
+  - mkdoxy:
+      projects:
+        gradient-motion-engine:
+          src-dirs: "src daemon"
+          full-doc: True
+          doxy-cfg:
+            PROJECT_NAME: "gradient-motion-engine"
+            PROJECT_BRIEF: "Node-level fade engine with mathematical curve evaluation"
+            FILE_PATTERNS: "*.h *.hpp"
+            RECURSIVE: True
+            EXTRACT_ALL: True
+            EXTRACT_PRIVATE: False
+            EXTRACT_STATIC: True
+            GENERATE_HTML: False
+            GENERATE_LATEX: False
+            GENERATE_XML: True
+            WARN_AS_ERROR: "NO"
