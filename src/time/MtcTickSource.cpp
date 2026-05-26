@@ -38,18 +38,23 @@ MtcStartError MtcTickSource::start(const std::string& midiPort) {
     MtcReceiver::setNetworkMode(true);
 
     // Scan available ports for a name containing midiPort.
-    RtMidiIn probe;
-    unsigned int nPorts = probe.getPortCount();
-    if (nPorts == 0) {
-        return MtcStartError::kNoPortsAvailable;
-    }
-
+    // RtMidiIn() throws RtMidiError when the ALSA/MIDI subsystem is absent
+    // (e.g., headless CI runners with no /dev/snd/seq).
     unsigned int portIndex = UINT_MAX;
-    for (unsigned int i = 0; i < nPorts; ++i) {
-        if (probe.getPortName(i).find(midiPort) != std::string::npos) {
-            portIndex = i;
-            break;
+    try {
+        RtMidiIn probe;
+        unsigned int nPorts = probe.getPortCount();
+        if (nPorts == 0) {
+            return MtcStartError::kNoPortsAvailable;
         }
+        for (unsigned int i = 0; i < nPorts; ++i) {
+            if (probe.getPortName(i).find(midiPort) != std::string::npos) {
+                portIndex = i;
+                break;
+            }
+        }
+    } catch (const RtMidiError&) {
+        return MtcStartError::kNoPortsAvailable;
     }
     if (portIndex == UINT_MAX) {
         return MtcStartError::kPortNotFound;
