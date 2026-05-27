@@ -13,7 +13,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Tests](https://github.com/stagesoft/gradient-motion-engine/actions/workflows/tests.yml/badge.svg)](https://github.com/stagesoft/gradient-motion-engine/actions/workflows/tests.yml)
-[![Coverage](https://codecov.io/gh/stagesoft/gradient-motion-engine/graph/badge.svg)](https://codecov.io/gh/stagesoft/gradient-motion-engine)
+[![codecov](https://codecov.io/gh/stagesoft/gradient-motion-engine/graph/badge.svg?token=8QZJTRJU0I)](https://codecov.io/gh/stagesoft/gradient-motion-engine)
 [![Deploy API documentation](https://github.com/stagesoft/gradient-motion-engine/actions/workflows/docs.yml/badge.svg)](https://github.com/stagesoft/gradient-motion-engine/actions/workflows/docs.yml)
 
 * **Source / issues:** [stagesoft/gradient-motion-engine](https://github.com/stagesoft/gradient-motion-engine) on GitHub
