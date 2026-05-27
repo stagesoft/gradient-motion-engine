@@ -50,8 +50,8 @@ jobs:
 
       - name: Load virtual ALSA sequencer
         run: |
-          sudo modprobe snd-seq
-          sudo modprobe snd-seq-dummy
+          sudo modprobe snd-seq || true
+          sudo modprobe snd-seq-dummy || true
 
       - name: Run tests
         run: ctest --test-dir build --output-on-failure
