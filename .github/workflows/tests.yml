@@ -48,6 +48,11 @@ jobs:
       - name: Build
         run: cmake --build build -j$(nproc)
 
+      - name: Load virtual ALSA sequencer
+        run: |
+          sudo modprobe snd-seq || true
+          sudo modprobe snd-seq-dummy || true
+
       - name: Run tests
         run: ctest --test-dir build --output-on-failure
 
