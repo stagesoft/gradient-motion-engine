@@ -14,6 +14,10 @@
 
 #include <climits>
 
+#ifdef __linux__
+#include <unistd.h>
+#endif
+
 namespace gme {
 namespace time {
 
@@ -37,9 +41,17 @@ MtcStartError MtcTickSource::start(const std::string& midiPort) {
     // MTC sources (e.g., rtpmidid) work without additional configuration (FR-002).
     MtcReceiver::setNetworkMode(true);
 
+    // Bail out early on Linux if the ALSA sequencer device is not present.
+    // This avoids an RtMidiError throw whose catch can silently fail when
+    // librtmidi's typeinfo address differs from the weak copy baked into
+    // static archives (RTTI mismatch across shared-library boundaries).
+#ifdef __linux__
+    if (access("/dev/snd/seq", F_OK) != 0) {
+        return MtcStartError::kNoPortsAvailable;
+    }
+#endif
+
     // Scan available ports for a name containing midiPort.
-    // RtMidiIn() throws RtMidiError when the ALSA/MIDI subsystem is absent
-    // (e.g., headless CI runners with no /dev/snd/seq).
     unsigned int portIndex = UINT_MAX;
     try {
         RtMidiIn probe;
@@ -54,6 +66,8 @@ MtcStartError MtcTickSource::start(const std::string& midiPort) {
             }
         }
     } catch (const RtMidiError&) {
+        return MtcStartError::kNoPortsAvailable;
+    } catch (...) {
         return MtcStartError::kNoPortsAvailable;
     }
     if (portIndex == UINT_MAX) {

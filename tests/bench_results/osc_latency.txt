@@ -1,8 +1,8 @@
 bench_osc_latency  N=1000  warmup=200
 
   A — synchronous lo_server       (spec SC-002 target p50≤1ms, p99≤5ms)
-    mean=0.005535 ms  p50=0.00545 ms [PASS]  p90=0.005481 ms  p99=0.006843 ms [PASS]  max=0.026129 ms
+    mean=0.005705 ms  p50=0.005421 ms [PASS]  p90=0.005811 ms  p99=0.01042 ms [PASS]  max=0.0478 ms
   B — lo_server_thread/OscServer  (production target p50≤5ms, p99≤20ms)
-    mean=0.009477 ms  p50=0.009037 ms [PASS]  p90=0.009438 ms  p99=0.017744 ms [PASS]  max=0.143061 ms
+    mean=0.009435 ms  p50=0.009067 ms [PASS]  p90=0.009729 ms  p99=0.021771 ms [PASS]  max=0.03686 ms
 
 RESULT: PASS
