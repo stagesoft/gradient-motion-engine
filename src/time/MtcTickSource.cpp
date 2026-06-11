@@ -74,6 +74,13 @@ MtcStartError MtcTickSource::start(const std::string& midiPort) {
         return MtcStartError::kPortNotFound;
     }
 
+    // Clear the >24h wrap accumulator before (re)starting. MtcReceiver keeps it
+    // in a process-global static, so a tick source restarted in-process after a
+    // >24h run would otherwise inherit a stale +86_400_000 ms offset and put the
+    // new session 24h ahead. The wire-driven reset can't catch a graceful
+    // restart (small backward delta), so clear it explicitly here. (Plan 3d)
+    MtcReceiver::resetWrapOffset();
+
     // Construct MtcReceiver — opens the port and starts the checker thread.
     // portIndex is the last constructor parameter (preserves positional compat).
     receiver_ = std::make_unique<MtcReceiver>(
