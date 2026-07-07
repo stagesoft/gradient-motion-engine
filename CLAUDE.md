@@ -1,44 +1,24 @@
-# gradient-motion-engine Development Guidelines
+# gradient-motion-engine
 
-Auto-generated from all feature plans. Last updated: 2026-04-23
+Part of the **CUEMS** ecosystem — see the [`cuems-RELATIONS`](https://github.com/stagesoft/cuems-RELATIONS) repo for the system index, architecture diagram, and protocol/port map.
 
-## Active Technologies
-- C++17 (GCC, `-Wall -O3 -pthread`) + None (C++ standard library only — `<cmath>`, `<vector>`, `<memory>`, `<string>`, `<functional>`) (002-gradient-curves)
-- C++17 (GCC, `-Wall -O3 -pthread`) + mtcreceiver v2.0.0 (submodule, pinned at `59fc76e`), (004-adapt-mtc-tick-v2)
-- N/A (in-memory adapter; no persistence) (004-adapt-mtc-tick-v2)
-- C++17 (GCC, `-Wall -O3 -pthread`) + NNG 1.10.1 (`libnng-dev`, C API — `nng_bus0_open`, (005-nng-bus-client)
-- N/A — all state is in-memory. The queue is a fixed-size array; (005-nng-bus-client)
-- C++17 (GCC, `-Wall -O3 -pthread`) + liblo (OSC sending), NNG 1.10.1 (already linked), nlohmann-json (already linked), RtMidi via mtcreceiver submodule (already linked) (006-fade-registry-tick-loop)
-- N/A — all state in-memory (`std::unordered_map` inside `FadeRegistry`, fixed SPSC queue for status) (006-fade-registry-tick-loop)
+## Role
 
-- C++17 (GCC, `-Wall -O3 -pthread`) (001-phase0-scaffold)
+Timecode-driven motion and gradient evaluation engine with OSC output. C++17 (GCC, `-Wall -O3 -pthread`). MTC-synced via the `mtcreceiver` submodule; talks to the CUEMS engine over the NNG bus (`libnng`) and sends OSC via `liblo`. On CUEMS hosts it listens on the `gradient_osc_port` (7100 in `settings.xml`). Also uses nlohmann-json.
 
-## Project Structure
+## Active technologies (per feature history)
 
-```text
-src/
-tests/
-```
+- C++17 (GCC, `-Wall -O3 -pthread`), C++ standard library only for the core (`<cmath>`, `<vector>`, `<memory>`, `<string>`, `<functional>`) — `001-phase0-scaffold`, `002-gradient-curves`.
+- `mtcreceiver` v2.0.0 (submodule) — `004-adapt-mtc-tick-v2`.
+- NNG 1.10.1 (`libnng-dev`, C API `nng_bus0_open`) — `005-nng-bus-client`.
+- liblo (OSC), nlohmann-json, RtMidi via mtcreceiver — `006-fade-registry-tick-loop`. All state in-memory (`FadeRegistry` map + fixed SPSC status queue).
 
-## Commands
+## Build & release
 
-# Add commands for C++17 (GCC, `-Wall -O3 -pthread`)
+Standard C++ submodule build (`git submodule update --init`, cmake/make). Release lineage: `rc_1` carries the fleet-wide MTC >24h work + `24h_extended_support` tag (tip `069f951`, 24h `mtcreceiver` `8a30d05`); `main` is the development line.
 
-## Code Style
+For additional per-feature context (project structure, shell commands), read the current plan at [specs/007-osc-input-transport/plan.md](specs/007-osc-input-transport/plan.md). Non-code artifacts follow the same `specs/planning/` convention as cuems-utils.
 
-C++17 (GCC, `-Wall -O3 -pthread`): Follow standard conventions
+## Field notes
 
-## Recent Changes
-- 006-fade-registry-tick-loop: Added C++17 (GCC, `-Wall -O3 -pthread`) + liblo (OSC sending), NNG 1.10.1 (already linked), nlohmann-json (already linked), RtMidi via mtcreceiver submodule (already linked)
-- 005-nng-bus-client: Added C++17 (GCC, `-Wall -O3 -pthread`) + NNG 1.10.1 (`libnng-dev`, C API — `nng_bus0_open`,
-- 004-adapt-mtc-tick-v2: Added C++17 (GCC, `-Wall -O3 -pthread`) + mtcreceiver v2.0.0 (submodule, pinned at `59fc76e`),
-
-
-<!-- MANUAL ADDITIONS START -->
-<!-- MANUAL ADDITIONS END -->
-
-<!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan:
-[specs/007-osc-input-transport/plan.md](specs/007-osc-input-transport/plan.md)
-<!-- SPECKIT END -->
+- Uses the shared `mtcreceiver` submodule — the 2s-resync-skip fix (`aa44894`) and the raw-wire-MTC timebase apply here too; see the mtcreceiver CLAUDE.md.
