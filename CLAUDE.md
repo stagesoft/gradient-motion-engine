@@ -4,7 +4,9 @@ Part of the **CUEMS** ecosystem — see the [`cuems-RELATIONS`](https://github.c
 
 ## Role
 
-Timecode-driven motion and gradient evaluation engine with OSC output. C++17 (GCC, `-Wall -O3 -pthread`). MTC-synced via the `mtcreceiver` submodule; talks to the CUEMS engine over the NNG bus (`libnng`) and sends OSC via `liblo`. On CUEMS hosts it listens on the `gradient_osc_port` (7100 in `settings.xml`). Also uses nlohmann-json.
+Timecode-driven motion and gradient evaluation engine with OSC output — runs as the daemon **`gradient-motiond`** (unit wired by cuems-common). C++17 (GCC, `-Wall -O3 -pthread`). MTC-synced via the `mtcreceiver` submodule; talks to the CUEMS engine over the NNG bus (`libnng`) and sends OSC via `liblo`. Also uses nlohmann-json.
+
+**Engine-side client:** `cuems-engine`'s `GradientClient` (`players/GradientClient.py`) is a fire-and-forget UDP OSC client targeting `gradient_osc_port` (7100 in `settings.xml`). Commands: `/gradient/start_fade`, `/gradient/cancel_motion <id>`, `/gradient/cancel_all`. The engine delegates cue fades here (loop-cue fades, ActionCue fades via `ActionHandler`) — the engine's loop only supervises; the fade curve itself is evaluated by this daemon.
 
 ## Active technologies (per feature history)
 
