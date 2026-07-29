@@ -17,6 +17,7 @@
 
 #include <nlohmann/json.hpp>
 #include <cstdio>
+#include "daemon/logging.h"
 
 namespace gme {
 namespace motion {
@@ -29,8 +30,8 @@ static std::unique_ptr<IMotion> makeFadeMotion(const gme::signal::FadeCommand& c
                                    : cmd.curve_params;
     auto curveOpt = gme::gradient::CurveFactory::createCurve(cmd.curve_type, params);
     if (!curveOpt) {
-        std::fprintf(stderr, "WARNING MotionFactory: unknown curve type '%s' "
-                     "(motion_id=%s)\n", cmd.curve_type.c_str(), cmd.motion_id.c_str());
+        GME_LOG_WARNING("MotionFactory: unknown curve type '" + cmd.curve_type
+                        + "' (motion_id=" + cmd.motion_id + ")");
         ctx.emitStatus(gme::signal::StatusKind::MotionError,
                        cmd.motion_id, "unknown_curve_type");
         return nullptr;
@@ -49,9 +50,9 @@ static std::unique_ptr<IMotion> makeFadeMotion(const gme::signal::FadeCommand& c
     // Build lo_address
     lo_address addr = gme::osc::makeAddress(cmd.osc_host, cmd.osc_port);
     if (!addr) {
-        std::fprintf(stderr, "WARNING MotionFactory: lo_address_new failed for "
-                     "%s:%d (motion_id=%s)\n",
-                     cmd.osc_host.c_str(), cmd.osc_port, cmd.motion_id.c_str());
+        GME_LOG_WARNING("MotionFactory: lo_address_new failed for " + cmd.osc_host
+                        + ":" + std::to_string(cmd.osc_port)
+                        + " (motion_id=" + cmd.motion_id + ")");
         ctx.emitStatus(gme::signal::StatusKind::MotionError,
                        cmd.motion_id, "osc_address_failed");
         return nullptr;
@@ -82,8 +83,8 @@ std::unique_ptr<IMotion> MotionFactory::fromCommand(const gme::signal::FadeComma
 
         case Type::START_CROSSFADE:
             // TODO Phase 7: return makeCrossfadePair(cmd, ctx);
-            std::fprintf(stderr, "INFO MotionFactory: START_CROSSFADE not yet "
-                         "implemented (motion_id=%s)\n", cmd.motion_id.c_str());
+            GME_LOG_INFO("MotionFactory: START_CROSSFADE not yet implemented (motion_id="
+                         + cmd.motion_id + ")");
             return nullptr;
 
         default:

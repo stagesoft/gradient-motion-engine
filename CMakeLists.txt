@@ -176,10 +176,9 @@ if(BUILD_DAEMON)
         target_include_directories(gradient-motiond PRIVATE ${LIBLO_INCLUDE_DIRS})
     endif()
 
-    if(ENABLE_CUEMS_LOGGER)
-        target_compile_definitions(gradient-motiond PRIVATE HAVE_CUEMS_LOGGER)
-        target_link_libraries(gradient-motiond PRIVATE cuemslogger)
-    endif()
+    # HAVE_CUEMS_LOGGER + cuemslogger now arrive via gradient_motion's
+    # PUBLIC usage requirements (src/CMakeLists.txt) — armed on the library
+    # so all its objects and every consumer share one logging backend.
 
     # Install rules — places the daemon at <prefix>/bin/gradient-motiond.
     # debian/rules sets CMAKE_INSTALL_PREFIX=/usr so the .deb ships
