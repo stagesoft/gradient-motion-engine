@@ -486,6 +486,32 @@ static bool test_us4_transient_failure_recovery() {
     return true;
 }
 
+static bool test_us4_real_lo_send_success_not_misclassified() {
+    // Regression for T069: liblo's lo_send() returns bytes-sent (a positive,
+    // non-zero int) on success, never 0. A mock that mirrors this — instead
+    // of the POSIX-style "0 = success" convention every other test in this
+    // file uses — must NOT trip the failure counter.
+    TestCtx ctx;
+    auto send = [](lo_address, const char*, float) -> int { return 20; };
+    auto reg = ctx.makeRegWithSend(send);
+
+    auto cmd = TestCtx::makeCmd("freal", "linear", 0.0f, 1.0f, 10000.0f, 0);
+    reg->apply(cmd);
+
+    for (int i = 0; i < gme::motion::MotionRegistry::kOscFailureThreshold; ++i) {
+        reg->tick(i * 10);
+    }
+
+    ASSERT_TRUE(reg->size() == 1,
+                "us4_real_lo_send: fade must survive N ticks of a real "
+                "liblo-style positive return value");
+
+    for (auto& r : ctx.emitted)
+        ASSERT_TRUE(r.reason != "osc_send_failed",
+                    "us4_real_lo_send: no spurious osc_send_failed");
+    return true;
+}
+
 // ---------------------------------------------------------------------------
 // US5 — MTC Pause, Resume, Rewind Behavior
 // ---------------------------------------------------------------------------
@@ -557,6 +583,7 @@ int main() {
         {"us3_cancel_all_timing",    test_us3_cancel_all_timing},
         {"us4_failure_threshold",        test_us4_osc_failure_threshold},
         {"us4_transient_recovery",       test_us4_transient_failure_recovery},
+        {"us4_real_lo_send_not_misclassified", test_us4_real_lo_send_success_not_misclassified},
         {"us5_pause_no_ticks",       test_us5_pause_no_ticks},
         {"us5_resume_correct_value", test_us5_resume_correct_value},
         {"us5_rewind_before_start",  test_us5_rewind_before_start},

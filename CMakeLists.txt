@@ -25,7 +25,7 @@ cmake_minimum_required(VERSION 3.10)
 # Allow target_link_libraries() on targets defined in other directories
 # (needed to link cuemslogger into mtcreceiver from the root CMakeLists)
 cmake_policy(SET CMP0079 NEW)
-project(gradient-motion-engine VERSION 0.3.0 LANGUAGES CXX)
+project(gradient-motion-engine VERSION 0.3.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
