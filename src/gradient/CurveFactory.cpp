@@ -17,6 +17,7 @@
 #include "EaseOutCurve.h"
 #include "SCurve.h"
 #include "ResampledCurve.h"
+#include "daemon/logging.h"
 
 namespace gme {
 namespace gradient {
@@ -54,8 +55,8 @@ CurveFactory::createCurve(const std::string& type,
         inner = std::make_unique<SCurve>();
 
     } else {
-        std::cerr << "[CurveFactory] Unknown curve type: '"
-                  << type << "' — returning nullopt\n";
+        GME_LOG_WARNING("CurveFactory: unknown curve type '" + std::string(type)
+                        + "' — returning nullopt");
         return std::nullopt;
     }
 

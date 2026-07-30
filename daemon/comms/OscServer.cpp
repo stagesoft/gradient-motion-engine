@@ -40,8 +40,8 @@ struct OscServer::Impl {
     bool started = false;
 
     static void errorHandler(int num, const char* msg, const char* where) {
-        std::fprintf(stderr, "ERROR OscServer: liblo error %d — %s (path: %s)\n",
-                     num, msg ? msg : "", where ? where : "");
+        GME_LOG_ERROR("OscServer: liblo error " + std::to_string(num) + " — "
+                      + (msg ? msg : "") + " (path: " + (where ? where : "") + ")");
     }
 
     // Per-address callback entry point (called on the liblo network thread).
@@ -84,11 +84,11 @@ struct OscServer::Impl {
                     break;
             }
         } catch (const std::exception& e) {
-            std::fprintf(stderr, "ERROR OscServer: exception in callback for %s: %s\n",
-                         path, e.what());
+            GME_LOG_ERROR("OscServer: exception in callback for " + std::string(path)
+                          + ": " + e.what());
         } catch (...) {
-            std::fprintf(stderr, "ERROR OscServer: unknown exception in callback for %s\n",
-                         path);
+            GME_LOG_ERROR("OscServer: unknown exception in callback for "
+                          + std::string(path));
         }
         return 0;  // 0 = handled; do not try further methods
     }
@@ -125,8 +125,7 @@ bool OscServer::start() {
     impl_->server_thread = lo_server_thread_new(port_str.c_str(), Impl::errorHandler);
 
     if (!impl_->server_thread) {
-        std::fprintf(stderr, "FATAL OscServer: failed to bind UDP port %s\n",
-                     port_str.c_str());
+        GME_LOG_CRITICAL("OscServer: failed to bind UDP port " + port_str);
         return false;
     }
 
@@ -143,7 +142,7 @@ bool OscServer::start() {
         Impl::onMessage, impl_.get());
 
     if (lo_server_thread_start(impl_->server_thread) != 0) {
-        std::fprintf(stderr, "FATAL OscServer: lo_server_thread_start failed\n");
+        GME_LOG_CRITICAL("OscServer: lo_server_thread_start failed");
         lo_server_thread_free(impl_->server_thread);
         impl_->server_thread = nullptr;
         return false;
