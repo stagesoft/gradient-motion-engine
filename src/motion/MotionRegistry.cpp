@@ -182,6 +182,12 @@ void MotionRegistry::tick(long mtc_ms) {
                 continue;
             }
         } else {
+            if (m.consecutive_osc_failures > 0) {
+                std::fprintf(stderr,
+                              "DEBUG MotionRegistry: motion_id=%s osc send "
+                              "recovered after %d failures\n",
+                              m.motion_id.c_str(), m.consecutive_osc_failures);
+            }
             m.consecutive_osc_failures = 0;
         }
 

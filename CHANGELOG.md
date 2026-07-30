@@ -5,6 +5,24 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-07-29 — Fix OSC send-failure misclassification
+
+See [specs/planning/T069-fix-osc-send-failure-misclassification.md](specs/planning/T069-fix-osc-send-failure-misclassification.md).
+
+### Fixed
+
+* **`FadeMotion::evalAndSend`** (`src/motion/FadeMotion.cpp`): `lo_send()` returns the
+  number of bytes sent (a positive, non-zero int) on success and `-1` on failure — never
+  `0`. The failure check used `ret != 0`, which misclassified every successful send as a
+  failure and killed any fade with `duration_ms` greater than ~25ms once
+  `kOscFailureThreshold` (5 consecutive ticks) was reached. Changed to `ret < 0`.
+* Documented the `OscSendFn` return-value contract on both declarations
+  (`src/motion/FadeMotion.h`, `src/motion/MotionRegistry.h`) to prevent test mocks (or
+  future callers) from reintroducing the POSIX-style "0 = success" assumption.
+* Added a `WARNING` log on individual OSC send failures in `FadeMotion::evalAndSend`, and
+  a `DEBUG` log in `MotionRegistry::tick` when a motion recovers from a transient failure
+  streak — prior visibility was limited to the terminal `MotionError:"osc_send_failed"`.
+
 ## [0.3.0] - 2026-05-13 — Phase H: OSC Input Transport
 
 Replaces the NNG bus-client inbound command transport with a localhost UDP OSC listener.

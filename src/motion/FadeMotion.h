@@ -61,7 +61,13 @@ namespace motion {
  */
 class FadeMotion final : public IMotion {
 public:
-    /** @brief Function type matching `gme::osc::sendFloat`. */
+    /**
+     * @brief Function type matching `gme::osc::sendFloat`.
+     *
+     * Return convention matches liblo's `lo_send()`: `>= 0` (bytes sent) on
+     * success, `< 0` on failure. NEVER assume `0` == success — `lo_send`
+     * never returns exactly `0` for a non-empty message.
+     */
     using OscSendFn = std::function<int(lo_address, const char*, float)>;
 
     /**
@@ -124,7 +130,7 @@ public:
      * `consecutive_osc_failures` — that is managed by `MotionRegistry::tick`.
      *
      * @param mtc_ms  Current MTC head position in milliseconds.
-     * @return        `EvalResult { completed=(t>=1.0), failed=(ret!=0) }`.
+     * @return        `EvalResult { completed=(t>=1.0), failed=(ret<0) }`.
      *
      * @throws Never.
      */

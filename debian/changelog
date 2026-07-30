@@ -1,3 +1,13 @@
+cuems-gradient-motiond (0.3.1-1) unstable; urgency=medium
+
+  * Fix FadeMotion::evalAndSend misclassifying every successful lo_send()
+    as a failure (ret != 0 instead of ret < 0), which silently killed
+    every fade with duration_ms > ~25ms via the 5-consecutive-failure
+    threshold. Add OscSendFn return-value contract docs and warning-level
+    logging on individual send failures.
+
+ -- Adrià Masip <adria@stagelab.coop>  Wed, 29 Jul 2026 19:00:53 +0200
+
 cuems-gradient-motiond (0.3.0-1) unstable; urgency=medium
 
   * Phase H — OSC Input Transport (spec 007-osc-input-transport).

@@ -25,7 +25,7 @@ cmake_minimum_required(VERSION 3.10)
 # Allow target_link_libraries() on targets defined in other directories
 # (needed to link cuemslogger into mtcreceiver from the root CMakeLists)
 cmake_policy(SET CMP0079 NEW)
-project(gradient-motion-engine VERSION 0.3.0 LANGUAGES CXX)
+project(gradient-motion-engine VERSION 0.3.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -39,6 +39,11 @@ add_compile_options(-Wall -O3 -pthread)
 # ===========================================================
 option(ENABLE_CUEMS_LOGGER "Build with CuemsLogger syslog backend" ON)
 option(BUILD_DAEMON "Build the gradient-motiond daemon (requires rtmidi)" ON)
+# Default ON so plain `cmake ..` and the CI TEST/COVERAGE stages keep building
+# the suite. The packaging BUILD stage (debian/rules) turns it OFF: a .deb only
+# ships the daemon, and the latency-budgeted benchmarks are unfit for shared
+# runners.
+option(BUILD_TESTS "Build the unit/integration test suite" ON)
 
 # ===========================================================
 # External dependencies via pkg-config
@@ -134,8 +139,12 @@ add_subdirectory(src)
 # ===========================================================
 # Tests
 # ===========================================================
-enable_testing()
-add_subdirectory(tests)
+if(BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+else()
+    message(STATUS "BUILD_TESTS=OFF — test suite not configured")
+endif()
 
 # ===========================================================
 # Version header (generated from project VERSION above)

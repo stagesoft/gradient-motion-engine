@@ -89,6 +89,10 @@ public:
      *
      * Stored and forwarded to `MotionFactory::fromCommand` when a `START_FADE`
      * command is applied. Not called directly by the registry.
+     *
+     * Return convention matches liblo's `lo_send()`: `>= 0` (bytes sent) on
+     * success, `< 0` on failure. NEVER assume `0` == success — `lo_send`
+     * never returns exactly `0` for a non-empty message.
      */
     using OscSendFn = std::function<int(lo_address, const char*, float)>;
 

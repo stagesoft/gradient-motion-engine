@@ -6,9 +6,44 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 %:
 	dh $@
 
+# --- Submodule guard -------------------------------------------------------
+# The daemon links mtcreceiver and cuemslogger, which live in git submodules.
+# On a runner that checked out without `submodules: recursive` CMake aborts
+# midway with a FATAL_ERROR; fail up front with the actual remedy instead.
 override_dh_auto_configure:
+	@for m in mtcreceiver cuemslogger; do \
+		test -f "$$m/CMakeLists.txt" || { \
+			echo "ERROR: submodule '$$m' is missing from the source tree."; \
+			echo "       Run 'git submodule update --init --recursive', or"; \
+			echo "       check out with actions/checkout submodules: recursive."; \
+			exit 1; }; \
+	done
 	dh_auto_configure -- \
 		-DCMAKE_BUILD_TYPE=Release \
 		-DCMAKE_INSTALL_PREFIX=/usr \
 		-DBUILD_DAEMON=ON \
 		-DBUILD_TESTS=OFF
+
+# --- Packaging BUILD stage: no tests here ---------------------------------
+# In the CI/CD pipeline the suite is exercised in dedicated, earlier stages
+# (TEST -> COVERAGE) against the same tree; this BUILD stage only has to emit
+# a deterministic .deb. Running dh_auto_test here would both duplicate that
+# work and fail non-deterministically on shared/virtualized runners (GitHub
+# Actions et al.): `test_motion_registry_bench` and `bench_osc_latency` are
+# latency-budgeted, the MTC tests want an ALSA sequencer that a container may
+# not expose, and `bench_osc_latency` writes its results back into the source
+# tree (tests/bench_results/), which dirties a packaging build.
+#
+# Note this override is what actually skips the run: -DBUILD_TESTS=OFF above
+# keeps the suite from being *compiled*, and this keeps it from being *run*,
+# so the stage stays correct even if the suite is re-enabled locally.
+#
+# Escape hatch: `RUN_DEB_TESTS=1 dpkg-buildpackage ...` forces the suite for a
+# local package build. An explicit `DEB_BUILD_OPTIONS=nocheck` still wins,
+# because dh_auto_test honours it internally.
+override_dh_auto_test:
+ifeq ($(RUN_DEB_TESTS),1)
+	dh_auto_test
+else
+	@echo "dh_auto_test: skipped in packaging BUILD stage — tests run in the CI TEST/COVERAGE stages (set RUN_DEB_TESTS=1 to force)"
+endif
