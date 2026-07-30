@@ -4,7 +4,7 @@ Part of the **CUEMS** ecosystem — see the [`cuems-RELATIONS`](https://github.c
 
 ## Role
 
-Timecode-driven motion and gradient evaluation engine with OSC output — runs as the daemon **`gradient-motiond`** (unit wired by cuems-common). C++17 (GCC, `-Wall -O3 -pthread`). MTC-synced via the `mtcreceiver` submodule; talks to the CUEMS engine over the NNG bus (`libnng`) and sends OSC via `liblo`. Also uses nlohmann-json.
+Timecode-driven motion and gradient evaluation engine with OSC output — runs as the daemon **`gradient-motiond`** (unit wired by cuems-common). C++17 (GCC, `-Wall -O3 -pthread`). MTC-synced via the `mtcreceiver` submodule; receives commands from the CUEMS engine over localhost UDP OSC and sends OSC out, both via `liblo`. Also uses nlohmann-json.
 
 **Engine-side client:** `cuems-engine`'s `GradientClient` (`players/GradientClient.py`) is a fire-and-forget UDP OSC client targeting `gradient_osc_port` (7100 in `settings.xml`). Commands: `/gradient/start_fade`, `/gradient/cancel_motion <id>`, `/gradient/cancel_all`. The engine delegates cue fades here (loop-cue fades, ActionCue fades via `ActionHandler`) — the engine's loop only supervises; the fade curve itself is evaluated by this daemon.
 
@@ -12,8 +12,8 @@ Timecode-driven motion and gradient evaluation engine with OSC output — runs a
 
 - C++17 (GCC, `-Wall -O3 -pthread`), C++ standard library only for the core (`<cmath>`, `<vector>`, `<memory>`, `<string>`, `<functional>`) — `001-phase0-scaffold`, `002-gradient-curves`.
 - `mtcreceiver` v2.0.0 (submodule) — `004-adapt-mtc-tick-v2`.
-- NNG 1.10.1 (`libnng-dev`, C API `nng_bus0_open`) — `005-nng-bus-client`.
-- liblo (OSC), nlohmann-json, RtMidi via mtcreceiver — `006-fade-registry-tick-loop`. All state in-memory (`FadeRegistry` map + fixed SPSC status queue).
+- liblo (OSC), nlohmann-json, RtMidi via mtcreceiver — `006-fade-registry-tick-loop`. All state in-memory (`MotionRegistry` map + fixed SPSC command queue).
+- liblo UDP OSC listener (`OscServer`, `127.0.0.1:<gradient_osc_port>`) as the inbound transport — `007-osc-input-transport`. Superseded the NNG bus client of `005-nng-bus-client`; `libnng` is **no longer a build or runtime dependency** (removed in v0.3.0, commit `538d992`), and the outbound NNG status channel is gone — motion status events are logged only.
 
 ## Build & release
 
