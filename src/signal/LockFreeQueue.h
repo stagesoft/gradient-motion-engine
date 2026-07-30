@@ -9,8 +9,9 @@
  * @file LockFreeQueue.h
  * @brief Fixed-capacity single-producer / single-consumer ring buffer.
  *
- * `LockFreeQueue<T, N>` is the hand-off path from the NNG receive
- * thread (producer) to the MTC tick thread (consumer). It satisfies
+ * `LockFreeQueue<T, N>` is the hand-off path from the inbound command
+ * thread (producer — whichever transport is in use; currently the liblo
+ * OSC server thread) to the MTC tick thread (consumer). It satisfies
  * Principle IV (Real-Time Safety) of the project constitution:
  *
  *  - **Zero heap allocation** after construction. Storage is
@@ -22,7 +23,7 @@
  *
  * ## SPSC contract
  *
- * - **Exactly one thread calls `push`** (the NNG receive thread).
+ * - **Exactly one thread calls `push`** (the inbound command thread).
  * - **Exactly one site at a time calls `pop`** — either the MTC tick
  *   callback or the 100 ms fallback drain timer, serialised via an
  *   external `std::atomic_flag` owned by the queue's owner.
@@ -46,7 +47,7 @@
  * @code
  *   gme::signal::LockFreeQueue<FadeCommand, 64> q;
  *
- *   // Producer (NNG recv thread):
+ *   // Producer (inbound command thread):
  *   FadeCommand cmd = ...;
  *   if (!q.push(std::move(cmd))) {
  *       GME_LOG_WARNING("fade command queue overflow — oldest dropped");

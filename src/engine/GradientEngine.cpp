@@ -41,7 +41,7 @@ GradientEngine::~GradientEngine() {
 bool GradientEngine::initialize(const GradientEngineConfig& config) {
     if (initialized_) return true;
 
-    // --- Build MotionRegistry (status events → logged, no NNG) ---
+    // --- Build MotionRegistry (status events → logged, no outbound channel) ---
     registry_ = std::make_unique<gme::motion::MotionRegistry>(
         tickSource_,
         [](gme::signal::StatusKind k,

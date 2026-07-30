@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <vector>
+#include "daemon/logging.h"
 
 namespace gme {
 namespace motion {
@@ -89,9 +90,8 @@ void MotionRegistry::apply(gme::signal::FadeCommand& cmd) {
             cancelAll();
             break;
         case Type::START_CROSSFADE:
-            std::fprintf(stderr, "INFO MotionRegistry: START_CROSSFADE dropped "
-                         "(deferred to future feature, motion_id=%s)\n",
-                         cmd.motion_id.c_str());
+            GME_LOG_INFO("MotionRegistry: START_CROSSFADE dropped (deferred to "
+                         "future feature, motion_id=" + cmd.motion_id + ")");
             break;
     }
 }
@@ -137,8 +137,8 @@ void MotionRegistry::addMotion(std::unique_ptr<IMotion> m) {
 void MotionRegistry::cancelMotion(const std::string& motion_id, bool snap_to_end) {
     auto it = motions_.find(motion_id);
     if (it == motions_.end()) {
-        std::fprintf(stderr, "WARNING MotionRegistry: cancelMotion: motion_id '%s' "
-                     "not found\n", motion_id.c_str());
+        GME_LOG_WARNING("MotionRegistry: cancelMotion: motion_id '" + motion_id
+                        + "' not found");
         return;
     }
 
@@ -182,6 +182,12 @@ void MotionRegistry::tick(long mtc_ms) {
                 continue;
             }
         } else {
+            if (m.consecutive_osc_failures > 0) {
+                std::fprintf(stderr,
+                              "DEBUG MotionRegistry: motion_id=%s osc send "
+                              "recovered after %d failures\n",
+                              m.motion_id.c_str(), m.consecutive_osc_failures);
+            }
             m.consecutive_osc_failures = 0;
         }
 

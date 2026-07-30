@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 
 namespace gme {
 namespace motion {
@@ -79,13 +80,19 @@ EvalResult FadeMotion::evalAndSend(long mtc_ms) {
 
     // Send OSC
     const int ret = oscSend_(osc_target_, osc_path.c_str(), value);
+    if (ret < 0) {
+        std::fprintf(stderr,
+                      "WARNING FadeMotion: osc send failed motion_id=%s path=%s "
+                      "lo_send_ret=%d\n",
+                      motion_id.c_str(), osc_path.c_str(), ret);
+    }
 
     // Update last_sent_value unconditionally (registry removes on failure anyway)
     last_sent_value = value;
 
     EvalResult r;
     r.completed      = (t >= 1.0f);
-    r.failed         = (ret != 0);
+    r.failed         = (ret < 0);
     r.failure_reason = r.failed ? "osc_send_failed" : nullptr;
     return r;
 }

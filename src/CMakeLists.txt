@@ -24,6 +24,20 @@ target_include_directories(gradient_motion PUBLIC
     ${CMAKE_SOURCE_DIR}
 )
 
+# Arm the CuemsLogger backend on the LIBRARY, not just the daemon executable.
+# Previously only mtcreceiver and gradient-motiond carried HAVE_CUEMS_LOGGER,
+# so every GME_LOG_* compiled into this library fell back to the std::cerr
+# emitter — under systemd those lines are stamped PRIORITY=6 and invisible to
+# `cuems-logs -e` — and GradientEngine.cpp, listed in BOTH targets, was
+# compiled twice with two different logging backends. PUBLIC on purpose: the
+# daemon and the test binaries then share one backend (side effect: ctest
+# output for the 5 test binaries goes to syslog when cuemslogger is enabled).
+# The TARGET guard covers BUILD_DAEMON=OFF, where cuemslogger is never added.
+if(ENABLE_CUEMS_LOGGER AND TARGET cuemslogger)
+    target_compile_definitions(gradient_motion PUBLIC HAVE_CUEMS_LOGGER)
+    target_link_libraries(gradient_motion PUBLIC cuemslogger)
+endif()
+
 target_link_libraries(gradient_motion PUBLIC
     nlohmann_json::nlohmann_json
 )

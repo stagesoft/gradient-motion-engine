@@ -26,7 +26,8 @@ namespace comms {
  * wire contract, parses them via `parseFadeOscCommand`, and on `ParseResult::Ok`
  * pushes to the `LockFreeQueue<FadeCommand, 64>` supplied at construction.
  *
- * Namespace: `gme::daemon::comms` (matches NngBusClient convention).
+ * Namespace: `gme::daemon::comms` — the convention for daemon-specific
+ * inbound-transport clients.
  *
  * ## Threading
  *
