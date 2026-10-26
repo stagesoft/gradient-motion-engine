@@ -2,6 +2,7 @@
  * ***
  * SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
  * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-FileContributor: Ion Reguera <ion@stagelab.coop>
  * ***
  */
 
@@ -95,6 +96,10 @@ long MtcTickSource::getMtcMs() const {
 
 bool MtcTickSource::isRunning() const {
     return MtcReceiver::isTimecodeRunning.load();
+}
+
+bool MtcTickSource::toLocalDay(long engineMs, long& localMs, long& k) const {
+    return MtcReceiver::toLocalDay(engineMs, localMs, k);
 }
 
 } // namespace time

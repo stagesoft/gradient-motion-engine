@@ -1,6 +1,7 @@
 # ***
 # SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
 # SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileContributor: Ion Reguera <ion@stagelab.coop>
 # ***
 
 add_executable(test_curves test_curves.cpp)
@@ -110,6 +111,27 @@ if(BUILD_DAEMON AND LIBLO_FOUND)
 
     add_test(NAME test_motion_registry COMMAND test_motion_registry)
     set_tests_properties(test_motion_registry PROPERTIES LABELS "unit")
+
+    # ── Day alignment of explicit fade starts (24h MTC wrap) ────────────────
+    add_executable(test_start_day_align test_start_day_align.cpp)
+
+    target_include_directories(test_start_day_align PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}
+    )
+
+    target_link_libraries(test_start_day_align PRIVATE
+        gradient_motion
+        mtcreceiver
+        ${RTMIDI_LIBRARIES}
+        ${LIBLO_LIBRARIES}
+        pthread
+    )
+
+    target_compile_definitions(test_start_day_align PRIVATE MTCRECV_TESTING)
+
+    add_test(NAME test_start_day_align COMMAND test_start_day_align)
+    set_tests_properties(test_start_day_align PROPERTIES LABELS "unit")
 
     # ── OscServer integration test (real loopback, opt-in) ──────────────────
     add_executable(test_osc_server_integration

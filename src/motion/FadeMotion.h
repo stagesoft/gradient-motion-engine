@@ -2,6 +2,7 @@
  * ***
  * SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
  * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-FileContributor: Ion Reguera <ion@stagelab.coop>
  * ***
  */
 
@@ -75,7 +76,11 @@ public:
      *
      * @param motion_id     Registry-unique id (from `FadeCommand::motion_id`).
      * @param osc_key       Composite supersede key `"host:port:path"`.
-     * @param start_mtc_ms  Absolute MTC start time. Must be ≥ 0.
+     * @param start_mtc_ms  Absolute MTC start time in this process's MTC day
+     *                      (MotionFactory converts engine times). May be
+     *                      slightly negative: a start just before midnight
+     *                      seen just after it; evalAndSend uses the signed
+     *                      difference.
      * @param duration_ms   Fade duration in ms. 0 → completes on first tick.
      * @param start_value   OSC value at t=0.
      * @param end_value     OSC value at t=1.
