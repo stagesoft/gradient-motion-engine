@@ -1,3 +1,5 @@
+<!-- SPDX-FileContributor: Ion Reguera <ion@stagelab.coop> -->
+
 # gradient-motion-engine
 
 Part of the **CUEMS** ecosystem — see the [`cuems-RELATIONS`](https://github.com/stagesoft/cuems-RELATIONS) repo for the system index, architecture diagram, and protocol/port map.
@@ -23,4 +25,14 @@ For additional per-feature context (project structure, shell commands), read the
 
 ## Field notes
 
+- **Explicit fade starts are converted into this process's MTC day (24 h wrap).** The engine sends `start_mtc_ms` in its
+  own 24h-extended domain; after a daemon restart past 24 h, or a load at wire 0–1 h after a real wrap or at 23–24 h, a
+  raw start froze the fade (a day ahead) or cut it at once (a day behind), with no log. `MotionFactory` resolves the `-1`
+  sentinel first (never converted) and converts an explicit start with `MtcTickSource::toLocalDay` (lock-free, tick
+  thread; `src/motion/StartDayAlign.h`); no clamp (`FadeMotion` uses the signed difference). **Fail closed:**
+  `MotionRegistry` defers every `START_FADE` (the sentinel too) while `MtcTickSource::isHeadAuthoritative()` is false
+  and builds them on the first authoritative tick; WARNING if one waits > 2 s with MTC running; cancels reach deferred
+  fades. Tests that build fades through the registry need an authoritative head (`setHeadAuthoritativeForTesting`).
+  Journal: `MTC day-align: on (12 h rule, ext)`, `MTC day realign k=…` once per k (WARNING only for k < 0 with the head
+  in day 0). Since `b4a6c48`/`9b0f183` (`fix/1amfwm7fbqy-mtc-day-align`).
 - Uses the shared `mtcreceiver` submodule — the 2s-resync-skip fix (`aa44894`) and the raw-wire-MTC timebase apply here too; see the mtcreceiver CLAUDE.md.
