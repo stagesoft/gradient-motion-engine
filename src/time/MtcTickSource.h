@@ -195,6 +195,13 @@ public:
      */
     bool toLocalDay(long engineMs, long& localMs, long& k) const;
 
+    /**
+     * @brief True once a complete MTC frame was decoded since start (or the
+     *        last wrap reset): before that the head is a quarter-frame ramp from
+     *        0 and must not place any start. Lock-free.
+     */
+    bool isHeadAuthoritative() const;
+
 private:
     std::unique_ptr<MtcReceiver> receiver_;  ///< Null until start() is called.
 };

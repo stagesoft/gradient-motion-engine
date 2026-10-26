@@ -27,9 +27,9 @@ namespace gme {
 namespace motion {
 
 // Day-alignment log state. fromCommand() runs on the tick thread only (the
-// registry drains its command queue there), so no lock.
+// registry drains its command queue and retries deferred fades there), so no
+// lock.
 static std::vector<long> s_dayKLogged;
-static bool s_asReceivedWarned = false;
 
 static void logStartResolution(StartResolution how, long k, long engineMs, long nowMs,
                                long startMs, const std::string& motionId) {
@@ -40,8 +40,9 @@ static void logStartResolution(StartResolution how, long k, long engineMs, long 
         if (realignIsWarning(k, nowMs)) GME_LOG_WARNING(line);
         else GME_LOG_INFO(line);
     }
-    if (how == StartResolution::AsReceived && !s_asReceivedWarned) {
-        s_asReceivedWarned = true;
+    if (how == StartResolution::AsReceived) {
+        // the registry defers fades until the head is authoritative: this is a
+        // reset racing the build, rare; logged every time
         GME_LOG_WARNING("MTC day-align: fade start " + std::to_string(engineMs)
                         + " ms used as received, MTC head not authoritative yet (motion_id="
                         + motionId + ")");
@@ -70,14 +71,14 @@ static std::unique_ptr<IMotion> makeFadeMotion(const gme::signal::FadeCommand& c
 
     // Resolve start_mtc_ms: the -1 sentinel (FR-016) first, never converted; an
     // explicit start is an engine time, converted into this process's MTC day
-    // (24h wrap). No clamp: FadeMotion uses the signed difference.
+    // (24h wrap). No clamp: FadeMotion uses the signed difference. now_ms is
+    // read apart from the head toLocalDay uses (a few ms apart): logs only.
     const long now_ms = ctx.mtcSource.getMtcMs();
     long start_ms = 0, day_k = 0;
     const StartResolution how = resolveStart(
         cmd.start_mtc_ms, now_ms,
         [&ctx](long e, long& l, long& k) { return ctx.mtcSource.toLocalDay(e, l, k); },
         start_ms, day_k);
-    logStartResolution(how, day_k, cmd.start_mtc_ms, now_ms, start_ms, cmd.motion_id);
 
     // Build osc_key
     std::string osc_key = cmd.osc_host + ":"
@@ -94,6 +95,8 @@ static std::unique_ptr<IMotion> makeFadeMotion(const gme::signal::FadeCommand& c
                        cmd.motion_id, "osc_address_failed");
         return nullptr;
     }
+    // logged for motions that are built only
+    logStartResolution(how, day_k, cmd.start_mtc_ms, now_ms, start_ms, cmd.motion_id);
 
     return std::make_unique<FadeMotion>(
         cmd.motion_id,

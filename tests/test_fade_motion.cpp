@@ -2,6 +2,7 @@
  * ***
  * SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
  * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-FileContributor: Ion Reguera <ion@stagelab.coop>
  * ***
  */
 
@@ -38,6 +39,7 @@
 #include "motion/MotionRegistry.h"
 #include "signal/FadeCommand.h"
 #include "time/MtcTickSource.h"
+#include "mtcreceiver/mtcreceiver.h"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -70,7 +72,12 @@ struct TestCtx {
     gme::time::MtcTickSource  tickSrc;
     std::vector<StatusEvent>  emitted;
 
-    TestCtx() {}
+    // The registry builds a fade only once the MTC head is authoritative (day
+    // alignment): these tests run with an authoritative head at 0.
+    TestCtx() {
+        MtcReceiver::mtcHead.store(0);
+        MtcReceiver::setHeadAuthoritativeForTesting(true);
+    }
 
     std::unique_ptr<gme::motion::MotionRegistry> makeReg() {
         return std::make_unique<gme::motion::MotionRegistry>(

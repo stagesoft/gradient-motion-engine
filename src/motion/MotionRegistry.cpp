@@ -2,6 +2,7 @@
  * ***
  * SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
  * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-FileContributor: Ion Reguera <ion@stagelab.coop>
  * ***
  */
 
@@ -70,29 +71,72 @@ void MotionRegistry::apply(gme::signal::FadeCommand& cmd) {
     using Type = gme::signal::FadeCommand::Type;
     switch (cmd.type) {
         case Type::START_FADE: {
-            MotionFactory::Context ctx{
-                mtcSource_,
-                oscSend_,
-                [this](gme::signal::StatusKind k,
-                       const std::string& id,
-                       const std::string& r) {
-                    emitStatus(k, id, r);
+            if (!mtcSource_.isHeadAuthoritative()) {
+                // no start can be placed in this process's MTC day yet: wait
+                // (latest per motion_id), built by the first authoritative tick
+                auto same = std::find_if(deferred_.begin(), deferred_.end(),
+                    [&cmd](const Deferred& d) { return d.cmd.motion_id == cmd.motion_id; });
+                if (same != deferred_.end()) deferred_.erase(same);
+                deferred_.push_back({cmd, std::chrono::steady_clock::now(), false});
+                if (deferred_.size() > kMaxDeferred) {
+                    GME_LOG_WARNING("MTC day-align: deferred fade queue full, dropped motion_id="
+                                    + deferred_.front().cmd.motion_id);
+                    deferred_.erase(deferred_.begin());
                 }
-            };
-            auto motion = MotionFactory::fromCommand(cmd, ctx);
-            if (motion) addMotion(std::move(motion));
+                break;
+            }
+            startFade(cmd);
             break;
         }
-        case Type::CANCEL_MOTION:
+        case Type::CANCEL_MOTION: {
+            auto d = std::find_if(deferred_.begin(), deferred_.end(),
+                [&cmd](const Deferred& x) { return x.cmd.motion_id == cmd.motion_id; });
+            if (d != deferred_.end()) { deferred_.erase(d); break; }   // never started
             cancelMotion(cmd.motion_id, /*snap_to_end=*/false);
             break;
+        }
         case Type::CANCEL_ALL:
+            deferred_.clear();
             cancelAll();
             break;
         case Type::START_CROSSFADE:
             GME_LOG_INFO("MotionRegistry: START_CROSSFADE dropped (deferred to "
                          "future feature, motion_id=" + cmd.motion_id + ")");
             break;
+    }
+}
+
+void MotionRegistry::startFade(gme::signal::FadeCommand& cmd) {
+    MotionFactory::Context ctx{
+        mtcSource_,
+        oscSend_,
+        [this](gme::signal::StatusKind k,
+               const std::string& id,
+               const std::string& r) {
+            emitStatus(k, id, r);
+        }
+    };
+    auto motion = MotionFactory::fromCommand(cmd, ctx);
+    if (motion) addMotion(std::move(motion));
+}
+
+void MotionRegistry::retryDeferred() {
+    if (deferred_.empty()) return;
+    if (mtcSource_.isHeadAuthoritative()) {
+        std::vector<Deferred> ready;
+        ready.swap(deferred_);
+        for (auto& d : ready) startFade(d.cmd);          // arrival order
+        return;
+    }
+    if (!mtcSource_.isRunning()) return;                 // MTC stopped: waiting is expected
+    const auto now = std::chrono::steady_clock::now();
+    for (auto& d : deferred_) {
+        const long waited = std::chrono::duration_cast<std::chrono::milliseconds>(now - d.since).count();
+        if (!d.warned && waited > kUnresolvedWarnMs) {
+            d.warned = true;
+            GME_LOG_WARNING("MTC day-align: fade motion_id=" + d.cmd.motion_id + " waiting "
+                            + std::to_string(waited) + " ms for an authoritative MTC head");
+        }
     }
 }
 
@@ -163,6 +207,7 @@ void MotionRegistry::cancelAll() {
 // ---------------------------------------------------------------------------
 
 void MotionRegistry::tick(long mtc_ms) {
+    retryDeferred();
     std::vector<std::string> to_remove;
 
     for (auto& kv : motions_) {

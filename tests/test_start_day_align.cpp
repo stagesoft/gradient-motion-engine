@@ -21,6 +21,7 @@
 
 #include "motion/IMotion.h"
 #include "motion/MotionFactory.h"
+#include "motion/MotionRegistry.h"
 #include "motion/StartDayAlign.h"
 #include "signal/FadeCommand.h"
 #include "time/MtcTickSource.h"
@@ -167,6 +168,94 @@ static bool test_factory_converts_explicit_start() {
     return true;
 }
 
+static gme::signal::FadeCommand fadeCmd(const std::string& id, long start) {
+    gme::signal::FadeCommand cmd;
+    cmd.type = gme::signal::FadeCommand::Type::START_FADE;
+    cmd.motion_id = id;
+    cmd.osc_host = "127.0.0.1";
+    cmd.osc_port = 9999;
+    cmd.osc_path = "/volmaster/" + id;
+    cmd.curve_type = "linear";
+    cmd.duration_ms = 1000.0f;
+    cmd.start_mtc_ms = start;
+    return cmd;
+}
+
+/** Factory, k = -1: daemon alive across midnight, engine reset since. */
+static bool test_factory_engine_behind() {
+    MtcReceiver::resetStaticStateForTesting();
+    gme::time::MtcTickSource src;
+    MtcReceiver::mtcHead.store(DAY + 600000);
+    MtcReceiver::setHeadAuthoritativeForTesting(true);
+    gme::motion::MotionFactory::Context ctx{
+        src,
+        [](lo_address, const char*, float) { return 0; },
+        [](gme::signal::StatusKind, const std::string&, const std::string&) {}
+    };
+    auto cmd = fadeCmd("b1", 605000);
+    auto m = gme::motion::MotionFactory::fromCommand(cmd, ctx);
+    ASSERT_TRUE(m != nullptr && m->start_mtc_ms == DAY + 605000, "engine day 0 -> this day 1");
+    MtcReceiver::resetStaticStateForTesting();
+    return true;
+}
+
+/**
+ * No authoritative head: START_FADE (explicit or -1) waits in the registry and
+ * is built by the first tick that finds the head authoritative, in this day.
+ */
+static bool test_registry_defers_until_authoritative() {
+    MtcReceiver::resetStaticStateForTesting();
+    gme::time::MtcTickSource src;
+    gme::motion::MotionRegistry reg(src,
+        [](gme::signal::StatusKind, const std::string&, const std::string&) {});
+    MtcReceiver::mtcHead.store(30);                       // a quarter-frame ramp, not a head
+    auto a = fadeCmd("d1", DAY + 605000);
+    auto b = fadeCmd("d2", -1);
+    reg.apply(a);
+    reg.apply(b);
+    ASSERT_TRUE(reg.size() == 0, "nothing built on a ramp head");
+    ASSERT_TRUE(reg.deferredCount() == 2, "both wait, the sentinel too");
+    reg.tick(40);
+    ASSERT_TRUE(reg.size() == 0 && reg.deferredCount() == 2, "still waiting");
+
+    MtcReceiver::mtcHead.store(600000);                   // first complete frame
+    MtcReceiver::setHeadAuthoritativeForTesting(true);
+    reg.tick(600000);
+    ASSERT_TRUE(reg.deferredCount() == 0, "retried");
+    ASSERT_TRUE(reg.size() == 2, "both built once the head is authoritative");
+    MtcReceiver::resetStaticStateForTesting();
+    return true;
+}
+
+/** Cancels reach deferred fades; a re-sent motion_id replaces the waiting one. */
+static bool test_registry_deferred_cancel_and_replace() {
+    MtcReceiver::resetStaticStateForTesting();
+    gme::time::MtcTickSource src;
+    gme::motion::MotionRegistry reg(src,
+        [](gme::signal::StatusKind, const std::string&, const std::string&) {});
+    auto a = fadeCmd("c1", 5000);
+    auto a2 = fadeCmd("c1", 6000);
+    auto b = fadeCmd("c2", 5000);
+    reg.apply(a);
+    reg.apply(a2);
+    reg.apply(b);
+    ASSERT_TRUE(reg.deferredCount() == 2, "same motion_id: latest replaces");
+    gme::signal::FadeCommand cancel;
+    cancel.type = gme::signal::FadeCommand::Type::CANCEL_MOTION;
+    cancel.motion_id = "c2";
+    reg.apply(cancel);
+    ASSERT_TRUE(reg.deferredCount() == 1, "CANCEL_MOTION removes a deferred fade");
+    gme::signal::FadeCommand all;
+    all.type = gme::signal::FadeCommand::Type::CANCEL_ALL;
+    reg.apply(all);
+    ASSERT_TRUE(reg.deferredCount() == 0, "CANCEL_ALL clears them");
+    MtcReceiver::setHeadAuthoritativeForTesting(true);
+    reg.tick(5000);
+    ASSERT_TRUE(reg.size() == 0, "a cancelled fade is never built");
+    MtcReceiver::resetStaticStateForTesting();
+    return true;
+}
+
 int main() {
     struct Test { const char* name; bool(*fn)(); };
     Test tests[] = {
@@ -179,6 +268,9 @@ int main() {
         {"rules",                         test_rules},
         {"production_resolver",           test_production_resolver},
         {"factory_converts_explicit_start", test_factory_converts_explicit_start},
+        {"factory_engine_behind",         test_factory_engine_behind},
+        {"registry_defers_until_authoritative", test_registry_defers_until_authoritative},
+        {"registry_deferred_cancel_and_replace", test_registry_deferred_cancel_and_replace},
     };
     int passed = 0, failed = 0;
     for (auto& t : tests) {

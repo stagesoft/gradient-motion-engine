@@ -102,5 +102,9 @@ bool MtcTickSource::toLocalDay(long engineMs, long& localMs, long& k) const {
     return MtcReceiver::toLocalDay(engineMs, localMs, k);
 }
 
+bool MtcTickSource::isHeadAuthoritative() const {
+    return MtcReceiver::isHeadAuthoritative();
+}
+
 } // namespace time
 } // namespace gme

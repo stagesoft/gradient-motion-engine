@@ -2,6 +2,7 @@
  * ***
  * SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
  * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-FileContributor: Ion Reguera <ion@stagelab.coop>
  * ***
  */
 
@@ -50,11 +51,13 @@
 #include "signal/LockFreeQueue.h"
 #include "time/MtcTickSource.h"
 
+#include <chrono>
 #include <functional>
 #include <lo/lo.h>
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace gme {
 namespace motion {
@@ -140,6 +143,12 @@ public:
      * `addMotion`; `CANCEL_MOTION` to `cancelMotion`; `CANCEL_ALL` to
      * `cancelAll`. `START_CROSSFADE` is logged and dropped (Phase 4).
      *
+     * Day alignment (24h MTC wrap): while the MTC head is not authoritative
+     * (before the first complete frame) no start can be placed in this
+     * process's day — not even `-1`, the head being a quarter-frame ramp from
+     * 0 — so a `START_FADE` waits in `deferred_` (latest per motion_id) and is
+     * built by the first `tick()` that finds the head authoritative.
+     *
      * @param cmd  Command drained from the `LockFreeQueue<FadeCommand, 64>`.
      *
      * @throws Never.
@@ -216,6 +225,14 @@ public:
     /** @brief Return the number of currently active motions. */
     std::size_t size() const noexcept { return motions_.size(); }
 
+    /** @brief START_FADE commands waiting for an authoritative MTC head. */
+    std::size_t deferredCount() const noexcept { return deferred_.size(); }
+
+    /** Deferred commands kept at most (the oldest is dropped with a WARNING). */
+    static constexpr std::size_t kMaxDeferred = 256;
+    /** A deferred command still waiting this long with MTC running is reported. */
+    static constexpr long kUnresolvedWarnMs = 2000;
+
 private:
     // -----------------------------------------------------------------------
     // Internal helpers
@@ -223,6 +240,12 @@ private:
 
     /** Remove a motion by id from both maps (destructor frees transport handle). */
     void removeMotion(const std::string& motion_id);
+
+    /** Build a START_FADE (MotionFactory) and insert it. */
+    void startFade(gme::signal::FadeCommand& cmd);
+
+    /** Build the deferred START_FADEs once the head is authoritative; else report stuck ones. */
+    void retryDeferred();
 
     /** Emit a status event through statusDirect_. */
     void emitStatus(gme::signal::StatusKind kind,
@@ -253,6 +276,14 @@ private:
      * Never touched during `tick()`.
      */
     std::unordered_map<std::string, std::string> osc_index_;
+
+    /** START_FADE commands waiting for an authoritative MTC head (tick thread only). */
+    struct Deferred {
+        gme::signal::FadeCommand cmd;
+        std::chrono::steady_clock::time_point since;
+        bool warned = false;
+    };
+    std::vector<Deferred> deferred_;
 };
 
 } // namespace motion
