@@ -2,6 +2,7 @@
  * ***
  * SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
  * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-FileContributor: Ion Reguera <ion@stagelab.coop>
  * ***
  */
 
@@ -180,6 +181,26 @@ public:
      * @endcode
      */
     bool isRunning() const;
+
+    /**
+     * @brief Convert an engine MTC time into this process's MTC day.
+     *
+     * The engine counts the 24 h wraps it has seen since its last reset; this
+     * process counts its own. Delegates to MtcReceiver::toLocalDay (nearest
+     * whole day, 12 h rule): `localMs = engineMs - k * 24 h`. Lock-free and
+     * wait-free: safe from the tick callback.
+     *
+     * @return false (outputs untouched) while the MTC head is not authoritative
+     *         (before the first complete frame, or right after a reset).
+     */
+    bool toLocalDay(long engineMs, long& localMs, long& k) const;
+
+    /**
+     * @brief True once a complete MTC frame was decoded since start (or the
+     *        last wrap reset): before that the head is a quarter-frame ramp from
+     *        0 and must not place any start. Lock-free.
+     */
+    bool isHeadAuthoritative() const;
 
 private:
     std::unique_ptr<MtcReceiver> receiver_;  ///< Null until start() is called.

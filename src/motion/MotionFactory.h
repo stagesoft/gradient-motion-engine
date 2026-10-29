@@ -2,6 +2,7 @@
  * ***
  * SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
  * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-FileContributor: Ion Reguera <ion@stagelab.coop>
  * ***
  */
 
@@ -52,7 +53,8 @@ public:
      * path) and passes it when handling a `START_FADE` command.
      */
     struct Context {
-        /** MTC source for resolving `start_mtc_ms == -1` (FR-016). */
+        /** MTC source: `start_mtc_ms == -1` (FR-016) and the day conversion of an
+         *  explicit start (MtcTickSource::toLocalDay, 24h wrap). */
         const gme::time::MtcTickSource& mtcSource;
 
         /** OSC send function forwarded into the new motion at construction. */

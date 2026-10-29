@@ -2,6 +2,7 @@
  * ***
  * SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
  * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-FileContributor: Ion Reguera <ion@stagelab.coop>
  * ***
  */
 
@@ -79,6 +80,8 @@ int GradientEngineApplication::initialize(int argc, char** argv) {
     GME_LOG_INFO("  Node name : " + config_->getNodeName());
     GME_LOG_INFO("  Log level : " + config_->getLogLevel());
     GME_LOG_INFO("  Conf path : " + config_->getConfPath());
+    // explicit fade starts are converted into this process's MTC day (24h wrap)
+    GME_LOG_INFO("MTC day-align: on (12 h rule, ext)");
 
     // Initialize GradientEngine (opens MIDI port and OSC socket)
     gme::engine::GradientEngineConfig engCfg;

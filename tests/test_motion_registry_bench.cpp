@@ -2,6 +2,7 @@
  * ***
  * SPDX-FileCopyrightText: 2026 Stagelab Coop SCCL
  * SPDX-License-Identifier: GPL-3.0-or-later
+ * SPDX-FileContributor: Ion Reguera <ion@stagelab.coop>
  * ***
  */
 
@@ -29,6 +30,7 @@
 #include "motion/MotionRegistry.h"
 #include "signal/FadeCommand.h"
 #include "time/MtcTickSource.h"
+#include "mtcreceiver/mtcreceiver.h"
 
 // ---------------------------------------------------------------------------
 // Scenario 1: FadeMotion via apply()
@@ -51,6 +53,9 @@ static gme::signal::FadeCommand makeCmd(int idx) {
 
 static bool runFadeMotionBench() {
     gme::time::MtcTickSource tickSrc;
+    // fades are built once the MTC head is authoritative (day alignment)
+    MtcReceiver::mtcHead.store(0);
+    MtcReceiver::setHeadAuthoritativeForTesting(true);
 
     gme::motion::MotionRegistry reg(tickSrc,
         [](gme::signal::StatusKind, const std::string&, const std::string&) {});
