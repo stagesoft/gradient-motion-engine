@@ -1,3 +1,12 @@
+cuems-gradient-motiond (0.3.1-2) unstable; urgency=medium
+
+  * Release of main 966abf9 (PR #9, 1amfwm7fbqy): explicit fade starts are
+    converted into this process's MTC day (mtcreceiver eb7ad4f, 12 h rule)
+    and deferred until the head is authoritative, so fades keep working
+    past 24 h of MTC. Part of the 869ejxng3 batch.
+
+ -- Ion Reguera <ion@stagelab.coop>  Tue, 03 Nov 2026 00:28:47 +0100
+
 cuems-gradient-motiond (0.3.1-1) unstable; urgency=medium
 
   * Fix FadeMotion::evalAndSend misclassifying every successful lo_send()
